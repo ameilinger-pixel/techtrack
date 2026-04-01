@@ -22,3 +22,4 @@ Export any data from Base44 before you shut it down, then insert rows into the m
 ## Legacy Base44 env vars
 
 `VITE_BASE44_APP_ID` / `VITE_BASE44_APP_BASE_URL` in `src/lib/app-params.js` are unused for this stack; you can ignore them.
+# techtrack
