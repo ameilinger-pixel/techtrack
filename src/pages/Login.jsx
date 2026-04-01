@@ -33,7 +33,8 @@ export default function Login() {
     if (!supabase) {
       toast({
         title: 'Missing configuration',
-        description: 'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local',
+        description:
+          'Add URL + key to .env.local (then restart npm run dev), or set them in Vercel: VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY, or NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY',
         variant: 'destructive',
       });
       return;

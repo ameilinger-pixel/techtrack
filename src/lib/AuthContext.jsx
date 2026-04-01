@@ -21,7 +21,7 @@ export const AuthProvider = ({ children }) => {
       setAuthError({
         type: 'unknown',
         message:
-          'Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env.local',
+          'Supabase URL/key missing. Add them to .env.local and restart, or set NEXT_PUBLIC_SUPABASE_* / VITE_SUPABASE_* on Vercel and redeploy.',
       });
       return;
     }
@@ -92,9 +92,9 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setIsAuthenticated(false);
     if (shouldRedirect) {
-      db.auth.logout(window.location.href);
+      db.auth.logout('/login');
     } else {
-      db.auth.logout();
+      db.auth.logout(false);
     }
   };
 

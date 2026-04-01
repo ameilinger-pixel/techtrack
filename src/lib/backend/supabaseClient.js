@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Vite only auto-loads VITE_*; we also accept NEXT_PUBLIC_* so keys from Supabase docs / other templates work.
+// VITE_* are set from vite.config define (merges .env + Vercel process.env). Fallbacks for dev HMR.
 const url =
   import.meta.env.VITE_SUPABASE_URL ||
   import.meta.env.NEXT_PUBLIC_SUPABASE_URL;
