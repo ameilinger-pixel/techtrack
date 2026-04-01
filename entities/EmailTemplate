@@ -1,0 +1,45 @@
+{
+  "name": "EmailTemplate",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Template name, e.g. 'Technician Assigned'"
+    },
+    "trigger": {
+      "type": "string",
+      "enum": [
+        "technician_assigned",
+        "no_tech_90_days",
+        "no_tech_30_days",
+        "crew_form_overdue"
+      ],
+      "description": "What event triggers this email"
+    },
+    "recipient": {
+      "type": "string",
+      "enum": [
+        "director",
+        "student"
+      ],
+      "default": "director"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "body": {
+      "type": "string",
+      "description": "HTML body. Use {{show_title}}, {{director_name}}, {{director_first_name}}, {{student_name}}, {{technician_first_name}}, {{tech_role}}, {{tech_week_start}}, {{days_until_tech}} as placeholders."
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "name",
+    "trigger",
+    "subject",
+    "body"
+  ]
+}

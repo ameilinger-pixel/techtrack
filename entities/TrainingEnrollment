@@ -1,0 +1,39 @@
+{
+  "name": "TrainingEnrollment",
+  "type": "object",
+  "properties": {
+    "training_id": {
+      "type": "string"
+    },
+    "training_title": {
+      "type": "string"
+    },
+    "student_id": {
+      "type": "string"
+    },
+    "student_name": {
+      "type": "string"
+    },
+    "student_email": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "enrolled",
+        "attended",
+        "completed",
+        "cancelled"
+      ],
+      "default": "enrolled"
+    },
+    "attendance_confirmed": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "training_id",
+    "student_id"
+  ]
+}

@@ -1,0 +1,9 @@
+-- Optional: one-time data import after leaving Base44.
+-- Export CSV or copy rows from Base44, then INSERT into public.shows, students,
+-- tech_assignments, etc. Row shape: use `body` jsonb with the same field names
+-- as in /entities (e.g. shows.body should include title, director_email, ...).
+--
+-- Example (adjust UUIDs and JSON):
+-- INSERT INTO public.shows (body) VALUES (
+--   '{"title":"Spring Musical","director_email":"dir@school.edu","status":"upcoming"}'::jsonb
+-- );
