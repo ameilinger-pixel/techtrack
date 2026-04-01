@@ -161,12 +161,48 @@ function makeAuthApi() {
     },
 
     logout(redirectOrUndefined) {
-      if (!supabase) return;
-      supabase.auth.signOut().then(() => {
-        if (typeof redirectOrUndefined === 'string' && redirectOrUndefined.length > 0) {
-          window.location.assign(redirectOrUndefined);
+      if (redirectOrUndefined === false) {
+        if (supabase) {
+          void supabase.auth.signOut();
         }
-      });
+        return;
+      }
+
+      const targetUrl =
+        typeof redirectOrUndefined === 'string' && redirectOrUndefined.length > 0
+          ? redirectOrUndefined.startsWith('http')
+            ? redirectOrUndefined
+            : new URL(redirectOrUndefined, window.location.origin).href
+          : new URL('/login', window.location.origin).href;
+
+      const go = () => {
+        window.location.replace(targetUrl);
+      };
+
+      if (!supabase) {
+        go();
+        return;
+      }
+
+      const hang = window.setTimeout(() => {
+        console.warn('[logout] signOut slow; redirecting anyway');
+        go();
+      }, 1200);
+
+      supabase.auth
+        .signOut()
+        .then(({ error }) => {
+          if (error) {
+            console.error('[logout]', error);
+          }
+        })
+        .catch((err) => {
+          console.error('[logout]', err);
+        })
+        .finally(() => {
+          window.clearTimeout(hang);
+          go();
+        });
     },
 
     redirectToLogin(returnUrl) {

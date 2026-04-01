@@ -82,6 +82,7 @@ export default function Sidebar({ role, collapsed, onToggle, user }) {
           </div>
         )}
         <Button
+          type="button"
           variant="ghost"
           size={collapsed ? "icon" : "default"}
           className={cn("w-full text-muted-foreground", !collapsed && "justify-start")}
