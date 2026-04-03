@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
 import AppLayout from '@/components/layout/AppLayout';
+import CommandCenter from '@/pages/CommandCenter';
 import DirectorDashboard from '@/pages/DirectorDashboard';
 import AdminDashboard from '@/pages/AdminDashboard';
 import AdminHub from '@/pages/AdminHub';
@@ -27,26 +28,8 @@ import Login from '@/pages/Login';
 
 const RoleBasedHome = () => {
   const { role } = useOutletContext?.() || {};
-  // #region agent log
-  (typeof fetch === 'function'
-    ? fetch('http://127.0.0.1:7739/ingest/00b824c1-7ecc-4155-9444-25770c8cfb9d', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f933e5' },
-        body: JSON.stringify({
-          sessionId: 'f933e5',
-          runId: 'pre-debug',
-          hypothesisId: 'H2',
-          location: 'src/App.jsx:RoleBasedHome',
-          message: 'RoleBasedHome role resolved',
-          data: { role },
-          timestamp: Date.now(),
-        }),
-      })
-    : Promise.resolve()
-  ).catch(() => {});
-  // #endregion
   if (role === 'director') return <DirectorDashboard />;
-  return <AdminHub />;
+  return <CommandCenter />;
 };
 
 const AuthenticatedApp = () => {
@@ -77,9 +60,7 @@ const AuthenticatedApp = () => {
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<RoleBasedHome />} />
-        <Route path="/director" element={<DirectorDashboard />} />
-        <Route path="/director/dashboard" element={<DirectorDashboard />} />
-        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin" element={<CommandCenter />} />
         <Route path="/admin/hub" element={<AdminHub />} />
         <Route path="/admin/tech-assignments" element={<TechAssignments />} />
         <Route path="/admin/inventory" element={<Inventory />} />

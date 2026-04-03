@@ -40,11 +40,7 @@ export default function Login() {
       return;
     }
     setLoading(true);
-    const emailNorm = email.trim().toLowerCase();
-    const { error } = await supabase.auth.signInWithPassword({
-      email: emailNorm,
-      password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
       toast({ title: error.message, variant: 'destructive' });
@@ -61,9 +57,8 @@ export default function Login() {
       return;
     }
     setLoading(true);
-    const emailNorm = email.trim().toLowerCase();
     const { error } = await supabase.auth.signUp({
-      email: emailNorm,
+      email,
       password,
       options: { data: { full_name: fullName.trim() } },
     });

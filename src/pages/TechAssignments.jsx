@@ -27,7 +27,6 @@ export default function TechAssignments() {
   const [confirmDeleteApp, setConfirmDeleteApp] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [approving, setApproving] = useState(false);
-  const [busyAssignmentId, setBusyAssignmentId] = useState(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -59,57 +58,25 @@ export default function TechAssignments() {
 
   const handleSubmitRequest = async (data) => {
     setSubmitting(true);
-    try {
-      await db.entities.TechAssignment.create({
-        ...data,
-        status: 'pending_admin_approval',
-      });
-    } catch (e) {
-      toast({
-        title: 'Could not create request',
-        description: e?.message || String(e),
-        variant: 'destructive',
-      });
-      setSubmitting(false);
-      return;
-    }
+    await db.entities.TechAssignment.create({
+      ...data,
+      status: 'pending_admin_approval',
+    });
+    // Email admin
+    await db.integrations.Core.SendEmail({
+      to: user?.email || '',
+      subject: `New Tech Request: ${data.show_title}`,
+      body: `<p>A new tech request has been submitted for <b>${data.show_title}</b> at ${data.theater}.</p><p>Tech Week: ${data.tech_week_start}</p>`,
+    });
     toast({ title: 'Tech request submitted' });
     refresh();
     setRequestModal(false);
     setSubmitting(false);
-    const notifyTo = user?.email?.trim();
-    if (notifyTo) {
-      const r = await db.integrations.Core.SendEmail({
-        to: notifyTo,
-        subject: `New Tech Request: ${data.show_title}`,
-        body: `<p>A new tech request has been submitted for <b>${data.show_title}</b> at ${data.theater}.</p><p>Tech Week: ${data.tech_week_start}</p>`,
-      });
-      if (!r.ok) {
-        toast({
-          title: 'Saved, but notification email failed',
-          description: r.error,
-          variant: 'destructive',
-        });
-      }
-    }
   };
 
   const handleApprove = async (assignment) => {
-    setBusyAssignmentId(assignment.id);
-    try {
-      await db.entities.TechAssignment.update(assignment.id, { status: 'requested' });
-    } catch (e) {
-      toast({
-        title: 'Could not approve assignment',
-        description: e?.message || String(e),
-        variant: 'destructive',
-      });
-      setBusyAssignmentId(null);
-      return;
-    }
-    toast({ title: 'Assignment approved and posted' });
-    refresh();
-    setBusyAssignmentId(null);
+    await db.entities.TechAssignment.update(assignment.id, { status: 'requested' });
+    // Email director that their request is approved and posted
     if (assignment.director_email) {
       const directorFirst = (assignment.director_name || '').split(' ')[0] || 'there';
       let dueDate = '';
@@ -118,164 +85,95 @@ export default function TechAssignments() {
         d.setDate(d.getDate() - 35);
         dueDate = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       }
-      const r = await db.integrations.Core.SendEmail({
+      await db.integrations.Core.SendEmail({
         to: assignment.director_email,
         subject: `Your Tech Request for "${assignment.show_title}" is Now Posted!`,
         body: `Hi ${directorFirst},<br><br>Great news! Your tech request for <strong>${assignment.show_title}</strong> has been reviewed and approved by our admin team. It is now posted and open for student applications.<br><br>${dueDate ? `<strong>Application Deadline:</strong> ${dueDate}<br><br>` : ''}Students will apply and we will notify you once a technician has been assigned. You can track the status of your request in your Director Dashboard.<br><br>Best regards,<br>The NTPA TechTrack Admin Team`,
       });
-      if (!r.ok) {
-        toast({
-          title: 'Posted — director email failed',
-          description: r.error,
-          variant: 'destructive',
-        });
-      }
     }
+    toast({ title: 'Assignment approved and posted' });
+    refresh();
   };
 
   const handleMarkComplete = async (assignment) => {
-    try {
-      await db.entities.TechAssignment.update(assignment.id, { status: 'completed' });
-      toast({ title: 'Assignment marked complete' });
-      refresh();
-    } catch (e) {
-      toast({
-        title: 'Update failed',
-        description: e?.message || String(e),
-        variant: 'destructive',
-      });
-    }
+    await db.entities.TechAssignment.update(assignment.id, { status: 'completed' });
+    toast({ title: 'Assignment marked complete' });
+    refresh();
   };
 
   const handleToggleVerification = async (assignment, field) => {
-    try {
-      await db.entities.TechAssignment.update(assignment.id, { [field]: !assignment[field] });
-      refresh();
-    } catch (e) {
-      toast({
-        title: 'Update failed',
-        description: e?.message || String(e),
-        variant: 'destructive',
-      });
-    }
+    await db.entities.TechAssignment.update(assignment.id, { [field]: !assignment[field] });
+    refresh();
   };
 
   const handleDeleteAssignment = async () => {
-    try {
-      await db.entities.TechAssignment.delete(confirmDeleteAssignment.id);
-      toast({ title: 'Assignment deleted' });
-      refresh();
-    } catch (e) {
-      toast({
-        title: 'Delete failed',
-        description: e?.message || String(e),
-        variant: 'destructive',
-      });
-    }
+    await db.entities.TechAssignment.delete(confirmDeleteAssignment.id);
+    toast({ title: 'Assignment deleted' });
+    refresh();
     setConfirmDeleteAssignment(null);
   };
 
   const handleDeleteApplication = async () => {
-    try {
-      await db.entities.TechApplication.delete(confirmDeleteApp.id);
-      toast({ title: 'Application deleted' });
-      queryClient.invalidateQueries({ queryKey: ['all-applications'] });
-    } catch (e) {
-      toast({
-        title: 'Delete failed',
-        description: e?.message || String(e),
-        variant: 'destructive',
-      });
-    }
+    await db.entities.TechApplication.delete(confirmDeleteApp.id);
+    toast({ title: 'Application deleted' });
+    queryClient.invalidateQueries({ queryKey: ['all-applications'] });
     setConfirmDeleteApp(null);
   };
 
   const handleSaveEdit = async (data) => {
-    try {
-      await db.entities.TechAssignment.update(data.id, data);
-      toast({ title: 'Assignment updated' });
-      refresh();
-      setEditModal(null);
-    } catch (e) {
-      toast({
-        title: 'Save failed',
-        description: e?.message || String(e),
-        variant: 'destructive',
-      });
-    }
+    await db.entities.TechAssignment.update(data.id, data);
+    toast({ title: 'Assignment updated' });
+    refresh();
+    setEditModal(null);
   };
 
   const handleApproveApplicant = async (app, assignment) => {
     setApproving(true);
-    const others = applications.filter(
-      (a) => a.assignment_id === assignment.id && a.id !== app.id && a.status === 'pending'
-    );
-    try {
-      await db.entities.TechApplication.update(app.id, { status: 'approved' });
-      await db.entities.TechAssignment.update(assignment.id, {
-        status: 'assigned',
-        assigned_student_id: app.student_id,
-        assigned_student_name: app.student_name,
-        assigned_student_email: app.student_email,
-      });
-      if (others.length > 0) {
-        await Promise.all(
-          others.map((other) =>
-            db.entities.TechApplication.update(other.id, { status: 'rejected' })
-          )
-        );
-      }
-      toast({ title: 'Applicant approved and assigned' });
-      queryClient.invalidateQueries({ queryKey: ['all-applications'] });
-      refresh();
-      setApplicantModal(null);
-
-      const studentFirst = (app.student_name || '').split(' ')[0] || 'there';
-      const assignedRole = (assignment.assigned_role || '').replace(/_/g, ' ');
-      const directorFirst = (assignment.director_name || '').split(' ')[0] || 'there';
-      // Do not await — Edge Function can hang; UI is already updated
-      void (async () => {
-        const emailErrors = [];
-        const r1 = await db.integrations.Core.SendEmail({
-          to: app.student_email,
-          subject: `You've been assigned to ${assignment.show_title}!`,
-          body: `Congratulations ${studentFirst},<br><br>You have been assigned the role of <strong>${assignedRole}</strong> for the production of <strong>${assignment.show_title}</strong>.<br><br>The director, ${assignment.director_name}, will be in touch with more details soon.<br><br>Best,<br>The Tech Team`,
-        });
-        if (!r1.ok) emailErrors.push(r1.error);
-        if (assignment.director_email) {
-          const r2 = await db.integrations.Core.SendEmail({
-            to: assignment.director_email,
-            subject: `Technician Assigned for ${assignment.show_title}`,
-            body: `Hi ${directorFirst},<br><br><strong>${app.student_name}</strong> has been assigned as the <strong>${assignedRole}</strong> for your production of <strong>${assignment.show_title}</strong>.<br><br>You can reach them at: ${app.student_email}<br><br>Please get in touch with them to coordinate rehearsal schedules and other details.<br><br>Best regards,<br>The NTPA TechTrack Admin Team`,
-          });
-          if (!r2.ok) emailErrors.push(r2.error);
-        }
-        for (const other of others) {
-          const otherFirst = (other.student_name || '').split(' ')[0] || 'there';
-          const r = await db.integrations.Core.SendEmail({
-            to: other.student_email,
-            subject: `Update on your application for ${assignment.show_title}`,
-            body: `Hi ${otherFirst},<br><br>Thank you for your interest in the ${assignedRole} role for ${assignment.show_title}. The position has now been filled.<br><br>We encourage you to apply for other opportunities in the future!<br><br>Best,<br>The Tech Team`,
-          });
-          if (!r.ok) emailErrors.push(r.error);
-        }
-        if (emailErrors.length) {
-          toast({
-            title: 'Assigned — some notification emails failed',
-            description: emailErrors[0],
-            variant: 'destructive',
-          });
-        }
-      })();
-    } catch (e) {
-      toast({
-        title: 'Could not assign applicant',
-        description: e?.message || String(e),
-        variant: 'destructive',
-      });
-    } finally {
-      setApproving(false);
+    // Approve this application
+    await db.entities.TechApplication.update(app.id, { status: 'approved' });
+    // Assign student to assignment
+    await db.entities.TechAssignment.update(assignment.id, {
+      status: 'assigned',
+      assigned_student_id: app.student_id,
+      assigned_student_name: app.student_name,
+      assigned_student_email: app.student_email,
+    });
+    // Reject other pending applications
+    const others = applications.filter(a => a.assignment_id === assignment.id && a.id !== app.id && a.status === 'pending');
+    for (const other of others) {
+      await db.entities.TechApplication.update(other.id, { status: 'rejected' });
     }
+    // Email approved student
+    const studentFirst = (app.student_name || '').split(' ')[0] || 'there';
+    const assignedRole = (assignment.assigned_role || '').replace(/_/g, ' ');
+    const directorFirst = (assignment.director_name || '').split(' ')[0] || 'there';
+    await db.integrations.Core.SendEmail({
+      to: app.student_email,
+      subject: `You've been assigned to ${assignment.show_title}!`,
+      body: `Congratulations ${studentFirst},<br><br>You have been assigned the role of <strong>${assignedRole}</strong> for the production of <strong>${assignment.show_title}</strong>.<br><br>The director, ${assignment.director_name}, will be in touch with more details soon.<br><br>Best,<br>The Tech Team`,
+    });
+    // Email director
+    if (assignment.director_email) {
+      await db.integrations.Core.SendEmail({
+        to: assignment.director_email,
+        subject: `Technician Assigned for ${assignment.show_title}`,
+        body: `Hi ${directorFirst},<br><br><strong>${app.student_name}</strong> has been assigned as the <strong>${assignedRole}</strong> for your production of <strong>${assignment.show_title}</strong>.<br><br>You can reach them at: ${app.student_email}<br><br>Please get in touch with them to coordinate rehearsal schedules and other details.<br><br>Best regards,<br>The NTPA TechTrack Admin Team`,
+      });
+    }
+    // Email rejected applicants
+    for (const other of others) {
+      const otherFirst = (other.student_name || '').split(' ')[0] || 'there';
+      await db.integrations.Core.SendEmail({
+        to: other.student_email,
+        subject: `Update on your application for ${assignment.show_title}`,
+        body: `Hi ${otherFirst},<br><br>Thank you for your interest in the ${assignedRole} role for ${assignment.show_title}. The position has now been filled.<br><br>We encourage you to apply for other opportunities in the future!<br><br>Best,<br>The Tech Team`,
+      });
+    }
+    toast({ title: 'Applicant approved and assigned' });
+    queryClient.invalidateQueries({ queryKey: ['all-applications'] });
+    refresh();
+    setApplicantModal(null);
+    setApproving(false);
   };
 
   const tabs = {
@@ -316,7 +214,6 @@ export default function TechAssignments() {
                   <AssignmentCard
                     key={a.id}
                     assignment={a}
-                    busyAssignmentId={busyAssignmentId}
                     onApprove={handleApprove}
                     onViewApplicants={setApplicantModal}
                     onMarkComplete={handleMarkComplete}

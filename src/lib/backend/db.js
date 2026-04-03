@@ -143,8 +143,7 @@ function makeAuthApi() {
       } = await sb.auth.getUser();
       if (userErr || !user) {
         const err = new Error('Not authenticated');
-        // Extend the Error object with a status code for callers.
-        /** @type {any} */ (err).status = 401;
+        err.status = 401;
         throw err;
       }
       const { data: profile, error: pErr } = await sb
@@ -215,53 +214,25 @@ function makeAuthApi() {
   };
 }
 
-const SEND_EMAIL_TIMEOUT_MS = 15000;
-
-function withTimeout(promise, ms, label) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(
-        () => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)),
-        ms
-      )
-    ),
-  ]);
-}
-
 function makeIntegrationsApi() {
   return {
     Core: {
-      /** Returns { ok: true, data } or { ok: false, error } — does not throw (email is best-effort for most flows). */
       async SendEmail({ to, subject, body: html }) {
         const sb = requireSupabase();
-        try {
-          const {
-            data: { session },
-          } = await sb.auth.getSession();
-          const { data, error } = await withTimeout(
-            sb.functions.invoke('send-email', {
-              body: { to, subject, body: html },
-              headers: session?.access_token
-                ? { Authorization: `Bearer ${session.access_token}` }
-                : {},
-            }),
-            SEND_EMAIL_TIMEOUT_MS,
-            'send-email'
-          );
-          if (error) {
-            console.error('[SendEmail]', error);
-            const msg =
-              typeof error.message === 'string'
-                ? error.message
-                : String(error?.context?.msg || error);
-            return { ok: false, error: msg };
-          }
-          return { ok: true, data };
-        } catch (e) {
-          console.error('[SendEmail]', e);
-          return { ok: false, error: e?.message || String(e) };
+        const {
+          data: { session },
+        } = await sb.auth.getSession();
+        const { data, error } = await sb.functions.invoke('send-email', {
+          body: { to, subject, body: html },
+          headers: session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {},
+        });
+        if (error) {
+          console.error('[SendEmail]', error);
+          throw error;
         }
+        return data;
       },
 
       async UploadFile({ file }) {

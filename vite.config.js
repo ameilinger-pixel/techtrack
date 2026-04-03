@@ -6,8 +6,6 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // https://vite.dev/config/
-// Note: Vite cannot resolve entry/index if the project path contains "#" or "?" (URL rules).
-// npm run build uses scripts/run-vite-build.mjs to copy to a safe temp path when needed.
 export default defineConfig(({ mode }) => {
   const root = __dirname;
   const fileEnv = loadEnv(mode, root, '');

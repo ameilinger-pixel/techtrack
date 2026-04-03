@@ -4,14 +4,15 @@ import React from 'react';
 import { useOutletContext, Link } from 'react-router-dom';
 
 import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Clapperboard, Wrench, ClipboardList, CheckCircle, Clock,
-  Users, ExternalLink, AlertCircle, UserCheck, Plus
+  Users, ExternalLink, AlertCircle, UserCheck, Plus, Copy
 } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
 
 function getDueDate(tech_week_start) {
   if (!tech_week_start) return null;
@@ -31,6 +32,7 @@ const STATUS_CONFIG = {
 
 export default function DirectorDashboard() {
   const { user } = useOutletContext();
+  const { toast } = useToast();
 
   const { data: assignments = [], isLoading } = useQuery({
     queryKey: ['director-assignments', user?.email],
@@ -101,6 +103,23 @@ export default function DirectorDashboard() {
                         {a.troupe && <span className="text-sm text-muted-foreground">({a.troupe})</span>}
                       </div>
                       {a.theater && <p className="text-xs text-muted-foreground">{a.theater}</p>}
+                      {/* Date + countdown row */}
+                      {(a.tech_week_start || a.opening_night) && (() => {
+                        const techDate = a.tech_week_start ? new Date(a.tech_week_start + 'T12:00:00') : null;
+                        const openDate = a.opening_night ? new Date(a.opening_night + 'T12:00:00') : null;
+                        const daysUntil = techDate ? Math.ceil((techDate - new Date()) / 86400000) : null;
+                        return (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {techDate && `Tech week: ${techDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                            {openDate && ` · Opens ${openDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                            {daysUntil !== null && (
+                              <span className={`ml-1.5 font-semibold ${daysUntil <= 14 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                                ({daysUntil > 0 ? `${daysUntil} days away` : daysUntil === 0 ? 'today!' : `${Math.abs(daysUntil)}d ago`})
+                              </span>
+                            )}
+                          </p>
+                        );
+                      })()}
                     </div>
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full flex items-center gap-1 shrink-0 ${cfg.color}`}>
                       <StatusIcon className="w-3 h-3" />{cfg.label}
@@ -154,6 +173,23 @@ export default function DirectorDashboard() {
                         ))}
                       </div>
                     )}
+
+                    {/* Persistent copy application link */}
+                    <div className="flex items-center gap-2 pt-1 border-t border-border/50">
+                      <span className="text-xs text-muted-foreground flex-1">Application link</span>
+                      <button
+                        className="flex items-center gap-1 text-xs text-primary hover:underline"
+                        onClick={() => {
+                          navigator.clipboard.writeText(applyUrl);
+                          toast({ title: 'Application link copied!' });
+                        }}
+                      >
+                        <Copy className="w-3 h-3" /> Copy link
+                      </button>
+                      <a href={applyUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-primary">
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
                   </CardContent>
                 </Card>
               );

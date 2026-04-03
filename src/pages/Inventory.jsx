@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Search, Package, Pencil, Trash2, Loader2, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/shared/ConfirmDialog';
+import { formatDateDisplay } from '@/lib/showUtils';
 
 const CATEGORIES = ['lighting', 'sound', 'projection', 'rigging', 'other'];
 

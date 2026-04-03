@@ -4,22 +4,9 @@ import { db } from '@/lib/backend/client';
 import { differenceInDays } from 'date-fns';
 import { parseDateSafe } from '@/lib/showUtils';
 
-// Replace {{placeholder}} tokens in subject/body (keys: letters, digits, underscore)
+// Replace {{placeholder}} tokens in subject/body
 export function fillTemplate(text, vars) {
-  return text.replace(/\{\{([\w]+)\}\}/g, (_, key) => vars[key] ?? '');
-}
-
-/** Public site origin for links in emails (Vercel/production). Fallback when not in browser. */
-function appOrigin() {
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return String(window.location.origin).replace(/\/$/, '');
-  }
-  try {
-    const o = import.meta.env?.VITE_APP_ORIGIN;
-    return o ? String(o).replace(/\/$/, '') : '';
-  } catch {
-    return '';
-  }
+  return text.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '');
 }
 
 // Extract first name from full name string
@@ -38,10 +25,6 @@ function buildVars(assignment) {
   const techRole = Array.isArray(assignment.roles_needed) && assignment.roles_needed.length > 0
     ? assignment.roles_needed[0]
     : (assignment.tech_needs_description || '');
-  const origin = appOrigin();
-  const techNeedsPath = '/director/request-tech';
-  const tech_needs_form_url = origin ? `${origin}${techNeedsPath}` : techNeedsPath;
-
   return {
     show_title: assignment.show_title || '',
     director_name: assignment.director_name || '',
@@ -55,7 +38,6 @@ function buildVars(assignment) {
     days_until_tech: daysUntil,
     theater: assignment.theater || '',
     troupe: assignment.troupe || '',
-    tech_needs_form_url,
   };
 }
 
@@ -118,6 +100,26 @@ export async function runEmailEngine(assignments, templates, existingPending) {
           p => p.assignment_id === assignment.id && p.trigger === 'technician_assigned' && ['pending','approved','sent'].includes(p.status)
         );
         shouldTrigger = !alreadySent;
+      }
+
+      if (template.trigger === 'application_posted') {
+        // Fire once when posting_created_date is set (application has gone live)
+        if (assignment.posting_created_date) {
+          const alreadySent = existingPending.some(
+            p => p.assignment_id === assignment.id && p.trigger === 'application_posted' && ['pending','approved','sent'].includes(p.status)
+          );
+          shouldTrigger = !alreadySent;
+        }
+      }
+
+      if (template.trigger === 'tech_week_reminder' && daysUntil !== null && daysUntil <= 7 && daysUntil > 0) {
+        // Remind assigned student one week before tech week
+        if (['assigned', 'confirmed'].includes(assignment.status) && assignment.assigned_student_email) {
+          const alreadySent = existingPending.some(
+            p => p.assignment_id === assignment.id && p.trigger === 'tech_week_reminder' && ['pending','approved','sent'].includes(p.status)
+          );
+          shouldTrigger = !alreadySent;
+        }
       }
 
       if (template.trigger === 'no_tech_90_days' && daysUntil !== null && daysUntil <= 90 && daysUntil > 60) {

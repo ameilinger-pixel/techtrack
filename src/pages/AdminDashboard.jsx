@@ -9,6 +9,7 @@ import StatsCard from '@/components/shared/StatsCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import StatusBadge from '@/components/shared/StatusBadge';
 import {
   ClipboardList, GraduationCap, Award,
   AlertTriangle, Package, CheckCircle,
@@ -18,16 +19,8 @@ import { showNeedsAction, parseDateSafe } from '@/lib/showUtils';
 import { differenceInDays } from 'date-fns';
 import ActionCenter from '@/components/admin/ActionCenter';
 
-function useAdminOutletContext() {
-  const ctx = useOutletContext();
-  return {
-    user: /** @type {any} */ (ctx)?.user,
-    role: /** @type {any} */ (ctx)?.role,
-  };
-}
-
 export default function AdminDashboard() {
-  const { user, role } = useAdminOutletContext();
+  const { user, role } = useOutletContext();
   const navigate = useNavigate();
 
   // Redirect non-admins away immediately
@@ -37,62 +30,37 @@ export default function AdminDashboard() {
     }
   }, [role]);
 
-  const adminEnabled = role === 'admin';
+  if (role && role !== 'admin') return null;
 
   const { data: students = [], isLoading: ls } = useQuery({
     queryKey: ['admin-students'],
     queryFn: () => db.entities.Student.list(),
-    enabled: adminEnabled,
   });
   const { data: assignments = [], isLoading: la } = useQuery({
     queryKey: ['admin-assignments'],
     queryFn: () => db.entities.TechAssignment.list(),
-    enabled: adminEnabled,
   });
   const { data: badges = [], isLoading: lb } = useQuery({
     queryKey: ['admin-badges'],
     queryFn: () => db.entities.Badge.list(),
-    enabled: adminEnabled,
   });
   const { data: enrollments = [], isLoading: le } = useQuery({
     queryKey: ['admin-enrollments'],
     queryFn: () => db.entities.BadgeEnrollment.list(),
-    enabled: adminEnabled,
   });
   const { data: shows = [], isLoading: lsh } = useQuery({
     queryKey: ['admin-shows'],
     queryFn: () => db.entities.Show.list(),
-    enabled: adminEnabled,
   });
   const { data: trainings = [], isLoading: lt } = useQuery({
     queryKey: ['admin-trainings'],
     queryFn: () => db.entities.Training.list(),
-    enabled: adminEnabled,
   });
   const { data: pendingEmails = [] } = useQuery({
     queryKey: ['pending-emails'],
     queryFn: () => db.entities.PendingEmail.list('-created_date', 200),
-    enabled: adminEnabled,
   });
   const pendingEmailCount = pendingEmails.filter(e => e.status === 'pending').length;
-
-  if (!adminEnabled) {
-    // While role is still loading, show a lightweight skeleton; once we know the
-    // user is not an admin, early-return without rendering the dashboard.
-    if (role == null) {
-      return (
-        <div className="p-6 space-y-4">
-          <Skeleton className="h-10 w-48" />
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-28" />
-            ))}
-          </div>
-        </div>
-      );
-    }
-    return null;
-  }
 
   const isLoading = ls || la || lb || le || lsh || lt;
 
@@ -131,46 +99,10 @@ export default function AdminDashboard() {
 
       {/* Top Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-        <Link to="/students">
-          <StatsCard
-            title="Students"
-            value={isLoading ? '—' : students.length}
-            subtitle=""
-            icon={GraduationCap}
-            color="blue"
-            onClick={() => {}}
-          />
-        </Link>
-        <Link to="/admin/hub">
-          <StatsCard
-            title="Active Shows"
-            value={isLoading ? '—' : activeShows.length}
-            subtitle=""
-            icon={Clapperboard}
-            color="purple"
-            onClick={() => {}}
-          />
-        </Link>
-        <Link to="/admin/tech-assignments">
-          <StatsCard
-            title="Tech Assignments"
-            value={isLoading ? '—' : assignments.length}
-            subtitle=""
-            icon={ClipboardList}
-            color="green"
-            onClick={() => {}}
-          />
-        </Link>
-        <Link to="/students">
-          <StatsCard
-            title="Badges"
-            value={isLoading ? '—' : badges.length}
-            subtitle=""
-            icon={Award}
-            color="amber"
-            onClick={() => {}}
-          />
-        </Link>
+        <Link to="/students"><StatsCard title="Students" value={isLoading ? '—' : students.length} icon={GraduationCap} color="blue" /></Link>
+        <Link to="/admin/hub"><StatsCard title="Active Shows" value={isLoading ? '—' : activeShows.length} icon={Clapperboard} color="purple" /></Link>
+        <Link to="/admin/tech-assignments"><StatsCard title="Tech Assignments" value={isLoading ? '—' : assignments.length} icon={ClipboardList} color="green" /></Link>
+        <Link to="/students"><StatsCard title="Badges" value={isLoading ? '—' : badges.length} icon={Award} color="amber" /></Link>
       </div>
 
       {/* Action Center */}

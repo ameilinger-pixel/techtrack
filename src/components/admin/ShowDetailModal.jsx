@@ -17,11 +17,12 @@ import ConfirmDialog from '@/components/shared/ConfirmDialog';
 
 import { useToast } from '@/components/ui/use-toast';
 import {
-  parseTechnicians, formatDateDisplay, directorNtpaOrgEmail, saveShowWithRetry
+  parseTechnicians, formatDateDisplay, directorNtpaOrgEmail,
+  mergeFormDataForSave, saveShowWithRetry
 } from '@/lib/showUtils';
 import {
   Save, Trash2, Archive, RotateCcw, Upload, Plus, X,
-  Loader2, Link as LinkIcon, Mail, Copy
+  Loader2, Link as LinkIcon, Mail, Copy, ExternalLink
 } from 'lucide-react';
 
 export default function ShowDetailModal({ show, open, onClose, onUpdated }) {
@@ -29,6 +30,8 @@ export default function ShowDetailModal({ show, open, onClose, onUpdated }) {
   const [saving, setSaving] = useState(false);
   const [emailModal, setEmailModal] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showPostingDialog, setShowPostingDialog] = useState(false);
+  const [postingUrl, setPostingUrl] = useState('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -206,7 +209,7 @@ export default function ShowDetailModal({ show, open, onClose, onUpdated }) {
             if (!form.director_contacted_date)
               actions.push({ label: '📧 Email Director', fn: sendDirectorContactEmail });
             if (form.director_contacted_date && !form.posting_created_date)
-              actions.push({ label: '📋 Mark App Posted', fn: () => advanceWorkflow('posting_open', 'posting_created_date') });
+              actions.push({ label: '📋 Create Application Posting', fn: () => setShowPostingDialog(true) });
             if (form.posting_created_date && !form.director_notified_date)
               actions.push({ label: '📣 Notify Director', fn: sendNotifyDirectorEmail });
             if (hasCrew && !form.assignment_email_sent)
@@ -224,6 +227,41 @@ export default function ShowDetailModal({ show, open, onClose, onUpdated }) {
               </div>
             ) : null;
           })()}
+
+          {/* Application Posting Dialog */}
+          {showPostingDialog && (
+            <div className="mb-3 p-4 rounded-lg border border-blue-200 bg-blue-50 space-y-3">
+              <p className="text-sm font-semibold text-blue-900">Create Application Posting</p>
+              <div>
+                <Label className="text-xs text-blue-800">Application Link URL (optional)</Label>
+                <Input
+                  value={postingUrl}
+                  onChange={e => setPostingUrl(e.target.value)}
+                  placeholder="https://forms.gle/..."
+                  className="mt-1 text-sm"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const today = new Date().toISOString().split('T')[0];
+                    setForm(prev => ({
+                      ...prev,
+                      posting_created_date: today,
+                      workflow_status: 'posting_open',
+                      ...(postingUrl ? { application_link_url: postingUrl } : {}),
+                    }));
+                    setShowPostingDialog(false);
+                    toast({ title: 'Application posting recorded — save to confirm.' });
+                  }}
+                >
+                  ✓ Mark as Posted
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setShowPostingDialog(false)}>Cancel</Button>
+              </div>
+            </div>
+          )}
 
           <Tabs defaultValue="details" className="mt-2">
             <TabsList className="w-full grid grid-cols-6">
@@ -259,6 +297,26 @@ export default function ShowDetailModal({ show, open, onClose, onUpdated }) {
                   </Button>
                 </div>
               </div>
+              {(() => {
+                const applyUrl = form.application_link_url || `${window.location.origin}/apply?show=${show.id}`;
+                return (
+                  <div>
+                    <Label>Application Link</Label>
+                    <div className="flex gap-2 mt-1">
+                      <Input value={applyUrl} readOnly className="text-xs" />
+                      <Button variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(applyUrl); toast({ title: 'Application link copied!' }); }}>
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                      <Button variant="outline" size="icon" asChild>
+                        <a href={applyUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-4 h-4" /></a>
+                      </Button>
+                    </div>
+                    {form.posting_created_date && (
+                      <p className="text-xs text-muted-foreground mt-1">Posted {formatDateDisplay(form.posting_created_date)}</p>
+                    )}
+                  </div>
+                );
+              })()}
               <div><Label>Notes</Label><Textarea value={form.notes||''} onChange={e => update('notes', e.target.value)} rows={3} /></div>
             </TabsContent>
 

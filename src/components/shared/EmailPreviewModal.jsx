@@ -1,6 +1,6 @@
 import { db } from '@/lib/backend/client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from '@/components/ui/dialog';
@@ -31,17 +31,17 @@ export default function EmailPreviewModal({ open, onClose, initialTo, initialCc,
 
   const handleSend = async () => {
     setSending(true);
-    const r = await db.integrations.Core.SendEmail({
-      to,
-      subject,
-      body: `<div style="font-family:Arial,sans-serif;line-height:1.6">${body.replace(/\n/g, '<br/>')}</div>`,
-    });
-    if (r.ok) {
+    try {
+      await db.integrations.Core.SendEmail({
+        to,
+        subject,
+        body: `<div style="font-family:Arial,sans-serif;line-height:1.6">${body.replace(/\n/g, '<br/>')}</div>`,
+      });
       toast({ title: 'Email sent successfully' });
       onSent?.();
       onClose();
-    } else {
-      toast({ title: 'Failed to send email', description: r.error, variant: 'destructive' });
+    } catch (err) {
+      toast({ title: 'Failed to send email', description: err.message, variant: 'destructive' });
     }
     setSending(false);
   };

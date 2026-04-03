@@ -1,43 +1,45 @@
+import { db } from '@/lib/backend/client';
+
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { cn } from '@/lib/utils';
 
 import { determineUserRole } from '@/lib/roleUtils';
-import { useAuth } from '@/lib/AuthContext';
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function AppLayout() {
-  const { user, isLoadingAuth } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [user, setUser] = useState(null);
   const [role, setRole] = useState('student');
-  const [roleReady, setRoleReady] = useState(false);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    if (!user?.email) {
-      setRoleReady(false);
-      return;
-    }
-    let cancelled = false;
-    setRoleReady(false);
-    determineUserRole(user).then((r) => {
-      if (cancelled) return;
-      setRole(r);
-      if (r === 'director' && !location.pathname.startsWith('/director')) {
-        navigate('/director', { replace: true });
+    async function init() {
+      try {
+        const me = await db.auth.me();
+        setUser(me);
+        const r = await determineUserRole(me);
+        setRole(r);
+        // Redirect directors away from any non-director page
+        if (r === 'director' && !location.pathname.startsWith('/director')) {
+          navigate('/director', { replace: true });
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        // not logged in
       }
-      setRoleReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [user, location.pathname, navigate]);
+      setLoading(false);
+    }
+    init();
+  }, []);
 
-  if (isLoadingAuth || !user || !roleReady) {
+  if (loading) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background">
         <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />

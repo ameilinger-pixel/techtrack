@@ -22,16 +22,6 @@ import { differenceInDays } from 'date-fns';
 import { parseDateSafe } from '@/lib/showUtils';
 import { showNeedsAction, getUrgencyBucket, crewCount } from '@/lib/showUtils';
 
-const ButtonAny = /** @type {any} */ (Button);
-const CardAny = /** @type {any} */ (Card);
-const CardHeaderAny = /** @type {any} */ (CardHeader);
-const CardTitleAny = /** @type {any} */ (CardTitle);
-const CardContentAny = /** @type {any} */ (CardContent);
-const TabsListAny = /** @type {any} */ (TabsList);
-const TabsTriggerAny = /** @type {any} */ (TabsTrigger);
-const TabsContentAny = /** @type {any} */ (TabsContent);
-const ShowDetailModalAny = /** @type {any} */ (ShowDetailModal);
-
 export default function AdminHub() {
   const [search, setSearch] = useState('');
   const [selectedShow, setSelectedShow] = useState(null);
@@ -144,17 +134,17 @@ export default function AdminHub() {
   return (
     <div>
       <PageHeader title="Admin Hub" subtitle="Manage all shows and their workflows">
-        <ButtonAny onClick={() => setAddModal(true)}><Plus className="w-4 h-4 mr-2" />Add Show</ButtonAny>
+        <Button onClick={() => setAddModal(true)}><Plus className="w-4 h-4 mr-2" />Add Show</Button>
       </PageHeader>
 
       {/* Action Center */}
-      <CardAny className="mb-6">
-        <CardHeaderAny className="pb-3">
-          <CardTitleAny className="text-base flex items-center gap-2">
+      <Card className="mb-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-500" />Action Center
-          </CardTitleAny>
-        </CardHeaderAny>
-        <CardContentAny>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
           {isLoading || la ? (
             <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
           ) : (
@@ -165,8 +155,8 @@ export default function AdminHub() {
               pendingBadgeReviews={pendingBadgeReviews}
             />
           )}
-        </CardContentAny>
-      </CardAny>
+        </CardContent>
+      </Card>
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
@@ -188,17 +178,17 @@ export default function AdminHub() {
             { key: 'declined', label: 'Declined' },
             { key: 'application_live', label: 'Application Live' },
           ].map(f => (
-            <ButtonAny
+            <Button
               key={f.key}
               variant={quickFilter === f.key ? 'default' : 'outline'}
               size="sm"
               onClick={() => setQuickFilter(quickFilter === f.key ? null : f.key)}
             >
               <Filter className="w-3 h-3 mr-1" />{f.label}
-            </ButtonAny>
+            </Button>
           ))}
           {quickFilter && (
-            <ButtonAny variant="ghost" size="sm" onClick={() => setQuickFilter(null)}><X className="w-3 h-3 mr-1" />Clear</ButtonAny>
+            <Button variant="ghost" size="sm" onClick={() => setQuickFilter(null)}><X className="w-3 h-3 mr-1" />Clear</Button>
           )}
         </div>
       </div>
@@ -228,24 +218,24 @@ export default function AdminHub() {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 ml-3">
                     {action === 'contact_director' && (
-                      <ButtonAny
+                      <Button
                         size="sm"
                         variant="outline"
                         className="h-6 text-xs px-2 border-amber-300 hover:bg-amber-100"
                         onClick={(e) => handleMarkContacted(e, s.id)}
                       >
                         ✓ Mark Contacted
-                      </ButtonAny>
+                      </Button>
                     )}
                     {action === 'post_application' && (
-                      <ButtonAny
+                      <Button
                         size="sm"
                         variant="outline"
                         className="h-6 text-xs px-2 border-amber-300 hover:bg-amber-100"
                         onClick={(e) => handleCreatePosting(e, s.id)}
                       >
                         ✓ Mark Posted
-                      </ButtonAny>
+                      </Button>
                     )}
                     <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full hidden sm:inline">
                       {ACTION_LABEL[action] || action}
@@ -293,17 +283,17 @@ export default function AdminHub() {
 
       {/* Tabbed views */}
       <Tabs defaultValue="upcoming">
-        <TabsListAny className="flex-wrap h-auto">
+        <TabsList className="flex-wrap h-auto">
           {Object.entries(tabShows).map(([key, arr]) => (
-            <TabsTriggerAny key={key} value={key} className="capitalize">
+            <TabsTrigger key={key} value={key} className="capitalize">
               {key.replace(/_/g, ' ')} <Badge variant="secondary" className="ml-1 text-xs">{arr.length}</Badge>
-            </TabsTriggerAny>
+            </TabsTrigger>
           ))}
-          <TabsTriggerAny value="calendar">📅 Calendar</TabsTriggerAny>
-        </TabsListAny>
+          <TabsTrigger value="calendar">📅 Calendar</TabsTrigger>
+        </TabsList>
 
         {Object.entries(tabShows).map(([key, arr]) => (
-          <TabsContentAny key={key} value={key} className="mt-4">
+          <TabsContent key={key} value={key} className="mt-4">
             {isLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {[1,2,3].map(i => <Skeleton key={i} className="h-32 w-full rounded-xl" />)}
@@ -315,22 +305,17 @@ export default function AdminHub() {
                 {arr.map(s => <ShowCard key={s.id} show={s} onClick={setSelectedShow} />)}
               </div>
             )}
-          </TabsContentAny>
+          </TabsContent>
         ))}
 
         {/* Calendar Tab */}
-        <TabsContentAny value="calendar" className="mt-4">
+        <TabsContent value="calendar" className="mt-4">
           <ShowCalendar shows={calendarShows} onShowClick={setSelectedShow} />
-        </TabsContentAny>
+        </TabsContent>
       </Tabs>
 
       <AddShowModal open={addModal} onClose={() => setAddModal(false)} onCreated={refresh} />
-      <ShowDetailModalAny
-        show={selectedShow}
-        open={!!selectedShow}
-        onClose={() => setSelectedShow(null)}
-        onUpdated={refresh}
-      />
+      <ShowDetailModal show={selectedShow} open={!!selectedShow} onClose={() => setSelectedShow(null)} onUpdated={refresh} />
     </div>
   );
 }
@@ -378,9 +363,9 @@ function ShowCalendar({ shows, onShowClick }) {
     <div>
       {/* Month nav */}
       <div className="flex items-center justify-between mb-4">
-        <ButtonAny variant="outline" size="sm" onClick={prevMonth}>←</ButtonAny>
+        <Button variant="outline" size="sm" onClick={prevMonth}>←</Button>
         <span className="font-semibold text-base">{MONTHS[month]} {year}</span>
-        <ButtonAny variant="outline" size="sm" onClick={nextMonth}>→</ButtonAny>
+        <Button variant="outline" size="sm" onClick={nextMonth}>→</Button>
       </div>
 
       {/* Day headers */}

@@ -10,7 +10,7 @@ import StatusBadge from '@/components/shared/StatusBadge';
 import TechNeedsForm from '@/components/director/TechNeedsForm';
 import {
   Clapperboard, Users, ClipboardList, CheckCircle,
-  Clock, AlertCircle, LogOut, ChevronRight, Mail,
+  Clock, AlertCircle, LogOut, ChevronRight, Mail, Phone,
   ExternalLink, FileText
 } from 'lucide-react';
 import { formatDateDisplay, parseTechnicians } from '@/lib/showUtils';

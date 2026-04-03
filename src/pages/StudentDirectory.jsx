@@ -15,6 +15,7 @@ import { Search, GraduationCap, Mail, Award } from 'lucide-react';
 export default function StudentDirectory() {
   const [search, setSearch] = useState('');
   const [skillFilter, setSkillFilter] = useState('all');
+  const [roleFilters, setRoleFilters] = useState([]);
 
   const { data: students = [], isLoading } = useQuery({
     queryKey: ['students'],
@@ -29,18 +30,35 @@ export default function StudentDirectory() {
     queryFn: () => db.entities.TechAssignment.list(),
   });
 
+  // Collect all unique roles/skills across all students
+  const allRoles = [...new Set(
+    students.flatMap(s => [
+      ...(Array.isArray(s.skills) ? s.skills : []),
+      ...(Array.isArray(s.roles) ? s.roles : []),
+    ]).filter(Boolean)
+  )].sort();
+
+  const toggleRole = (role) => {
+    setRoleFilters(prev =>
+      prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
+    );
+  };
+
   const filtered = students.filter(s => {
     const q = search.toLowerCase();
     const matchSearch = !q || s.full_name?.toLowerCase().includes(q) || s.email?.toLowerCase().includes(q);
     const matchSkill = skillFilter === 'all' || s.skill_level === skillFilter;
-    return matchSearch && matchSkill;
+    const matchRoles = roleFilters.length === 0 || roleFilters.some(r =>
+      (s.skills || []).includes(r) || (s.roles || []).includes(r)
+    );
+    return matchSearch && matchSkill && matchRoles;
   });
 
   return (
     <div>
       <PageHeader title="Student Directory" subtitle={`${students.length} students`} />
 
-      <div className="flex flex-wrap gap-3 mb-6">
+      <div className="flex flex-wrap gap-3 mb-4">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input placeholder="Search students..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
@@ -55,6 +73,33 @@ export default function StudentDirectory() {
           </SelectContent>
         </Select>
       </div>
+
+      {/* Role/skill chip filters */}
+      {allRoles.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-6">
+          {allRoles.map(role => (
+            <button
+              key={role}
+              onClick={() => toggleRole(role)}
+              className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                roleFilters.includes(role)
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background border-border text-muted-foreground hover:border-primary hover:text-foreground'
+              }`}
+            >
+              {role}
+            </button>
+          ))}
+          {roleFilters.length > 0 && (
+            <button
+              onClick={() => setRoleFilters([])}
+              className="text-xs px-3 py-1 rounded-full border border-dashed border-muted-foreground text-muted-foreground hover:text-foreground transition-colors"
+            >
+              ✕ Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

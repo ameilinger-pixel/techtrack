@@ -5,8 +5,9 @@ import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { runEmailEngine } from '@/lib/emailEngine';
 import PageHeader from '@/components/shared/PageHeader';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +18,6 @@ import { format } from 'date-fns';
 
 const TRIGGER_LABELS = {
   technician_assigned: 'Technician Assigned',
-  no_tech_90_days: 'No Tech — ~90 Days Out',
   no_tech_30_days: 'No Tech — 30 Days Out',
   crew_form_overdue: 'Crew Form Overdue',
 };
@@ -33,6 +33,7 @@ export default function PendingEmails() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [preview, setPreview] = useState(null);
+  const [editedBody, setEditedBody] = useState('');
   const [scanning, setScanning] = useState(false);
   const [sending, setSending] = useState(null);
 
@@ -61,20 +62,11 @@ export default function PendingEmails() {
 
   const handleApproveAndSend = async (email) => {
     setSending(email.id);
-    const r = await db.integrations.Core.SendEmail({
-      to: email.to,
-      subject: email.subject,
-      body: email.body,
-    });
-    if (!r.ok) {
-      toast({
-        title: 'Send failed',
-        description: r.error,
-        variant: 'destructive',
-      });
-      setSending(null);
-      return;
+    const bodyToSend = email.id === preview?.id ? editedBody : email.body;
+    if (bodyToSend !== email.body) {
+      await db.entities.PendingEmail.update(email.id, { body: bodyToSend });
     }
+    await db.integrations.Core.SendEmail({ to: email.to, subject: email.subject, body: bodyToSend });
     await db.entities.PendingEmail.update(email.id, { status: 'sent' });
     toast({ title: `Email sent to ${email.to}` });
     refresh();
@@ -94,7 +86,7 @@ export default function PendingEmails() {
   const rejected = emails.filter(e => e.status === 'rejected');
 
   const EmailCard = ({ email }) => (
-    <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setPreview(email)}>
+    <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => { setPreview(email); setEditedBody(email.body || ''); }}>
       <CardContent className="pt-4 pb-3">
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex-1 min-w-0">
@@ -168,7 +160,7 @@ export default function PendingEmails() {
       </Tabs>
 
       {/* Preview / Edit Modal */}
-      <Dialog open={!!preview} onOpenChange={open => !open && setPreview(null)}>
+      <Dialog open={!!preview} onOpenChange={open => { if (!open) { setPreview(null); setEditedBody(''); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -188,9 +180,18 @@ export default function PendingEmails() {
                 <p className="text-sm border rounded px-3 py-2 bg-muted">{preview.subject}</p>
               </div>
               <div>
-                <p className="text-sm font-medium mb-1">Body</p>
-                <div className="border rounded p-3 text-sm bg-white prose prose-sm max-w-none"
-                  dangerouslySetInnerHTML={{ __html: preview.body }} />
+                <p className="text-sm font-medium mb-1">Body <span className="text-xs text-muted-foreground font-normal">(editable — changes are saved when you send)</span></p>
+                <Textarea
+                  value={editedBody}
+                  onChange={e => setEditedBody(e.target.value)}
+                  rows={12}
+                  className="text-sm font-mono"
+                />
+                <p className="text-xs text-muted-foreground mt-1">HTML is supported. Preview renders below.</p>
+                {editedBody && (
+                  <div className="mt-2 border rounded p-3 text-sm bg-white prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: editedBody }} />
+                )}
               </div>
               {preview.status === 'pending' && (
                 <div className="flex gap-2 pt-2">
