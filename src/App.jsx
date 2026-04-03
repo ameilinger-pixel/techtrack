@@ -27,8 +27,26 @@ import Login from '@/pages/Login';
 
 const RoleBasedHome = () => {
   const { role } = useOutletContext?.() || {};
+  // #region agent log
+  (typeof fetch === 'function'
+    ? fetch('http://127.0.0.1:7739/ingest/00b824c1-7ecc-4155-9444-25770c8cfb9d', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f933e5' },
+        body: JSON.stringify({
+          sessionId: 'f933e5',
+          runId: 'pre-debug',
+          hypothesisId: 'H2',
+          location: 'src/App.jsx:RoleBasedHome',
+          message: 'RoleBasedHome role resolved',
+          data: { role },
+          timestamp: Date.now(),
+        }),
+      })
+    : Promise.resolve()
+  ).catch(() => {});
+  // #endregion
   if (role === 'director') return <DirectorDashboard />;
-  return <AdminDashboard />;
+  return <AdminHub />;
 };
 
 const AuthenticatedApp = () => {

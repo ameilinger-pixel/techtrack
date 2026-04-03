@@ -79,25 +79,36 @@ export default function ApplyForAssignment() {
       return;
     }
     setSaving(true);
-    await db.entities.TechApplication.create({
-      assignment_id: assignmentId,
-      student_name: form.student_name,
-      student_email: form.student_email,
-      experience: `Level: ${form.level}\nTrack: ${form.track}\nRoles: ${form.roles_applying_for.join(", ")}\nRecent Shows: ${form.recent_shows}\nBadges/Skills: ${form.relevant_badges_skills}`,
-      cover_letter: form.comments,
-      availability_notes: form.conflicts,
-      status: "pending",
-    });
+    try {
+      await db.entities.TechApplication.create({
+        assignment_id: assignmentId,
+        student_name: form.student_name,
+        student_email: form.student_email,
+        experience: `Level: ${form.level}\nTrack: ${form.track}\nRoles: ${form.roles_applying_for.join(", ")}\nRecent Shows: ${form.recent_shows}\nBadges/Skills: ${form.relevant_badges_skills}`,
+        cover_letter: form.comments,
+        availability_notes: form.conflicts,
+        status: "pending",
+      });
+    } catch (err) {
+      toast({
+        title: "Could not submit application",
+        description: err?.message || String(err),
+        variant: "destructive",
+      });
+      setSaving(false);
+      return;
+    }
 
     try {
       const admins = await db.entities.User.filter({ role: "admin" });
       const adminEmail = admins?.[0]?.email;
       if (adminEmail) {
-        await db.integrations.Core.SendEmail({
+        const r = await db.integrations.Core.SendEmail({
           to: adminEmail,
           subject: `New Application: ${assignment.show_title}`,
           body: `<strong>${form.student_name}</strong> (${form.student_email}) has applied for <strong>${form.roles_applying_for.join(", ") || "a tech position"}</strong> on <strong>${assignment.show_title}</strong>.<br><br><strong>Level:</strong> ${form.level}<br><strong>Track:</strong> ${form.track}<br><strong>Conflicts:</strong> ${form.conflicts || "None listed"}<br><strong>Badges/Skills:</strong> ${form.relevant_badges_skills || "—"}<br><strong>Recent Shows:</strong> ${form.recent_shows || "—"}<br><strong>Comments:</strong> ${form.comments || "—"}<br><br>Review it in the Tech Assignments admin page.`,
         });
+        if (!r.ok) console.warn("[ApplyForAssignment] admin notify failed", r.error);
       }
     } catch (_) {}
 

@@ -7,7 +7,9 @@ import StatsCard from '@/components/shared/StatsCard';
 import ShowCard from '@/components/admin/ShowCard';
 import AddShowModal from '@/components/admin/AddShowModal';
 import ShowDetailModal from '@/components/admin/ShowDetailModal';
+import ActionCenter from '@/components/admin/ActionCenter';
 import EmptyState from '@/components/shared/EmptyState';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -20,6 +22,16 @@ import { differenceInDays } from 'date-fns';
 import { parseDateSafe } from '@/lib/showUtils';
 import { showNeedsAction, getUrgencyBucket, crewCount } from '@/lib/showUtils';
 
+const ButtonAny = /** @type {any} */ (Button);
+const CardAny = /** @type {any} */ (Card);
+const CardHeaderAny = /** @type {any} */ (CardHeader);
+const CardTitleAny = /** @type {any} */ (CardTitle);
+const CardContentAny = /** @type {any} */ (CardContent);
+const TabsListAny = /** @type {any} */ (TabsList);
+const TabsTriggerAny = /** @type {any} */ (TabsTrigger);
+const TabsContentAny = /** @type {any} */ (TabsContent);
+const ShowDetailModalAny = /** @type {any} */ (ShowDetailModal);
+
 export default function AdminHub() {
   const [search, setSearch] = useState('');
   const [selectedShow, setSelectedShow] = useState(null);
@@ -31,8 +43,43 @@ export default function AdminHub() {
     queryKey: ['hub-shows'],
     queryFn: () => db.entities.Show.list('-updated_date', 500),
   });
+  const { data: assignments = [], isLoading: la } = useQuery({
+    queryKey: ['hub-assignments'],
+    queryFn: () => db.entities.TechAssignment.list('-updated_date', 500),
+  });
+  const { data: trainings = [] } = useQuery({
+    queryKey: ['hub-trainings'],
+    queryFn: () => db.entities.Training.list(),
+  });
+  const { data: enrollments = [] } = useQuery({
+    queryKey: ['hub-enrollments'],
+    queryFn: () => db.entities.BadgeEnrollment.list(),
+  });
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['hub-shows'] });
+  const pendingTrainingProposals = trainings.filter(t => t.status === 'proposed').length;
+  const pendingBadgeReviews = enrollments.filter(e => e.status === 'pending_review').length;
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['hub-shows'] });
+    queryClient.invalidateQueries({ queryKey: ['hub-assignments'] });
+  };
+
+  const handleMarkContacted = async (e, showId) => {
+    e.stopPropagation();
+    const today = new Date().toISOString().split('T')[0];
+    await db.entities.Show.update(showId, { director_contacted_date: today });
+    refresh();
+  };
+
+  const handleCreatePosting = async (e, showId) => {
+    e.stopPropagation();
+    const today = new Date().toISOString().split('T')[0];
+    await db.entities.Show.update(showId, {
+      posting_created_date: today,
+      workflow_status: 'posting_open',
+    });
+    refresh();
+  };
 
   const filteredShows = shows.filter(s => {
     const q = search.toLowerCase();
@@ -91,11 +138,35 @@ export default function AdminHub() {
     completed: filteredShows.filter(s => s.status === 'completed'),
   };
 
+  // Calendar: all shows with a tech_week_start date
+  const calendarShows = shows.filter(s => s.tech_week_start && s.status !== 'archived');
+
   return (
     <div>
       <PageHeader title="Admin Hub" subtitle="Manage all shows and their workflows">
-        <Button onClick={() => setAddModal(true)}><Plus className="w-4 h-4 mr-2" />Add Show</Button>
+        <ButtonAny onClick={() => setAddModal(true)}><Plus className="w-4 h-4 mr-2" />Add Show</ButtonAny>
       </PageHeader>
+
+      {/* Action Center */}
+      <CardAny className="mb-6">
+        <CardHeaderAny className="pb-3">
+          <CardTitleAny className="text-base flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-500" />Action Center
+          </CardTitleAny>
+        </CardHeaderAny>
+        <CardContentAny>
+          {isLoading || la ? (
+            <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          ) : (
+            <ActionCenter
+              assignments={assignments}
+              shows={shows}
+              pendingTrainingProposals={pendingTrainingProposals}
+              pendingBadgeReviews={pendingBadgeReviews}
+            />
+          )}
+        </CardContentAny>
+      </CardAny>
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
@@ -117,17 +188,17 @@ export default function AdminHub() {
             { key: 'declined', label: 'Declined' },
             { key: 'application_live', label: 'Application Live' },
           ].map(f => (
-            <Button
+            <ButtonAny
               key={f.key}
               variant={quickFilter === f.key ? 'default' : 'outline'}
               size="sm"
               onClick={() => setQuickFilter(quickFilter === f.key ? null : f.key)}
             >
               <Filter className="w-3 h-3 mr-1" />{f.label}
-            </Button>
+            </ButtonAny>
           ))}
           {quickFilter && (
-            <Button variant="ghost" size="sm" onClick={() => setQuickFilter(null)}><X className="w-3 h-3 mr-1" />Clear</Button>
+            <ButtonAny variant="ghost" size="sm" onClick={() => setQuickFilter(null)}><X className="w-3 h-3 mr-1" />Clear</ButtonAny>
           )}
         </div>
       </div>
@@ -155,8 +226,28 @@ export default function AdminHub() {
                     <span className="text-sm font-medium text-foreground truncate">{s.title}</span>
                     <span className="text-xs text-muted-foreground hidden sm:inline truncate">{s.director_name}</span>
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-                    <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                    {action === 'contact_director' && (
+                      <ButtonAny
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-xs px-2 border-amber-300 hover:bg-amber-100"
+                        onClick={(e) => handleMarkContacted(e, s.id)}
+                      >
+                        ✓ Mark Contacted
+                      </ButtonAny>
+                    )}
+                    {action === 'post_application' && (
+                      <ButtonAny
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-xs px-2 border-amber-300 hover:bg-amber-100"
+                        onClick={(e) => handleCreatePosting(e, s.id)}
+                      >
+                        ✓ Mark Posted
+                      </ButtonAny>
+                    )}
+                    <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full hidden sm:inline">
                       {ACTION_LABEL[action] || action}
                     </span>
                     {days !== null && (
@@ -202,15 +293,17 @@ export default function AdminHub() {
 
       {/* Tabbed views */}
       <Tabs defaultValue="upcoming">
-        <TabsList>
+        <TabsListAny className="flex-wrap h-auto">
           {Object.entries(tabShows).map(([key, arr]) => (
-            <TabsTrigger key={key} value={key} className="capitalize">
+            <TabsTriggerAny key={key} value={key} className="capitalize">
               {key.replace(/_/g, ' ')} <Badge variant="secondary" className="ml-1 text-xs">{arr.length}</Badge>
-            </TabsTrigger>
+            </TabsTriggerAny>
           ))}
-        </TabsList>
+          <TabsTriggerAny value="calendar">📅 Calendar</TabsTriggerAny>
+        </TabsListAny>
+
         {Object.entries(tabShows).map(([key, arr]) => (
-          <TabsContent key={key} value={key} className="mt-4">
+          <TabsContentAny key={key} value={key} className="mt-4">
             {isLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {[1,2,3].map(i => <Skeleton key={i} className="h-32 w-full rounded-xl" />)}
@@ -222,12 +315,127 @@ export default function AdminHub() {
                 {arr.map(s => <ShowCard key={s.id} show={s} onClick={setSelectedShow} />)}
               </div>
             )}
-          </TabsContent>
+          </TabsContentAny>
         ))}
+
+        {/* Calendar Tab */}
+        <TabsContentAny value="calendar" className="mt-4">
+          <ShowCalendar shows={calendarShows} onShowClick={setSelectedShow} />
+        </TabsContentAny>
       </Tabs>
 
       <AddShowModal open={addModal} onClose={() => setAddModal(false)} onCreated={refresh} />
-      <ShowDetailModal show={selectedShow} open={!!selectedShow} onClose={() => setSelectedShow(null)} onUpdated={refresh} />
+      <ShowDetailModalAny
+        show={selectedShow}
+        open={!!selectedShow}
+        onClose={() => setSelectedShow(null)}
+        onUpdated={refresh}
+      />
+    </div>
+  );
+}
+
+// ─── Inline calendar component ─────────────────────────────────────────────
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+const STATUS_DOT = {
+  upcoming: 'bg-blue-400',
+  in_progress: 'bg-amber-400',
+  completed: 'bg-green-400',
+};
+
+function ShowCalendar({ shows, onShowClick }) {
+  const today = new Date();
+  const [year, setYear] = React.useState(today.getFullYear());
+  const [month, setMonth] = React.useState(today.getMonth());
+
+  const prevMonth = () => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); };
+  const nextMonth = () => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); };
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  // Map day-of-month → shows whose tech_week_start falls on that day
+  const showsByDay = {};
+  shows.forEach(s => {
+    if (!s.tech_week_start) return;
+    const d = new Date(s.tech_week_start + 'T12:00:00');
+    if (d.getFullYear() === year && d.getMonth() === month) {
+      const day = d.getDate();
+      if (!showsByDay[day]) showsByDay[day] = [];
+      showsByDay[day].push(s);
+    }
+  });
+
+  const cells = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  const todayDay = today.getFullYear() === year && today.getMonth() === month ? today.getDate() : null;
+
+  return (
+    <div>
+      {/* Month nav */}
+      <div className="flex items-center justify-between mb-4">
+        <ButtonAny variant="outline" size="sm" onClick={prevMonth}>←</ButtonAny>
+        <span className="font-semibold text-base">{MONTHS[month]} {year}</span>
+        <ButtonAny variant="outline" size="sm" onClick={nextMonth}>→</ButtonAny>
+      </div>
+
+      {/* Day headers */}
+      <div className="grid grid-cols-7 mb-1">
+        {DAYS.map(d => (
+          <div key={d} className="text-center text-xs font-semibold text-muted-foreground py-1">{d}</div>
+        ))}
+      </div>
+
+      {/* Grid */}
+      <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden border border-border">
+        {cells.map((day, i) => {
+          const dayShows = day ? (showsByDay[day] || []) : [];
+          const isToday = day === todayDay;
+          return (
+            <div
+              key={i}
+              className={`min-h-[72px] p-1.5 text-xs ${day ? 'bg-background' : 'bg-muted/30'} ${isToday ? 'bg-primary/5' : ''}`}
+            >
+              {day && (
+                <>
+                  <span className={`inline-flex w-5 h-5 items-center justify-center rounded-full text-xs font-medium mb-1 ${isToday ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>
+                    {day}
+                  </span>
+                  <div className="space-y-0.5">
+                    {dayShows.slice(0, 3).map(s => (
+                      <div
+                        key={s.id}
+                        className="flex items-center gap-1 cursor-pointer group"
+                        onClick={() => onShowClick(s)}
+                        title={s.title}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[s.status] || 'bg-gray-400'}`} />
+                        <span className="truncate text-[10px] text-foreground group-hover:text-primary leading-tight">
+                          {s.title}
+                        </span>
+                      </div>
+                    ))}
+                    {dayShows.length > 3 && (
+                      <span className="text-[10px] text-muted-foreground">+{dayShows.length - 3} more</span>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" />Upcoming</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />In progress</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400" />Completed</span>
+      </div>
     </div>
   );
 }

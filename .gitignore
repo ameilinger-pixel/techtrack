@@ -29,3 +29,7 @@ dist-ssr
 
 .env
 .vite
+
+# Bulk auth script (service role — never commit)
+scripts/.env.bulk
+scripts/bulk-auth-results.json

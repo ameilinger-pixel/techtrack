@@ -2,6 +2,8 @@
 
 React + Vite app using **Supabase** for Postgres, auth, storage, and optional Edge Functions for email.
 
+**Plain summary for AI (what it is + what I want):** [docs/COPY_PASTE_BRIEF.txt](docs/COPY_PASTE_BRIEF.txt) · [docs/DEVELOPER_BRIEF.md](docs/DEVELOPER_BRIEF.md)
+
 ## Quick start
 
 1. `npm install`

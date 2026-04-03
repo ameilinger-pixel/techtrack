@@ -7,7 +7,14 @@ import { CheckCircle, Users, Calendar, MapPin, Link, Pencil, Trash2 } from 'luci
 import { useToast } from '@/components/ui/use-toast';
 
 export default function AssignmentCard({
-  assignment, onApprove, onViewApplicants, onMarkComplete, onToggleVerification, onEdit, onDelete
+  assignment,
+  busyAssignmentId,
+  onApprove,
+  onViewApplicants,
+  onMarkComplete,
+  onToggleVerification,
+  onEdit,
+  onDelete,
 }) {
   const a = assignment;
   const { toast } = useToast();
@@ -58,8 +65,13 @@ export default function AssignmentCard({
           </Button>
         )}
         {isPending && onApprove && (
-          <Button size="sm" onClick={() => onApprove(a)}>
-            <CheckCircle className="w-3.5 h-3.5 mr-1" />Approve & Post
+          <Button
+            size="sm"
+            onClick={() => onApprove(a)}
+            disabled={busyAssignmentId === a.id}
+          >
+            <CheckCircle className="w-3.5 h-3.5 mr-1" />
+            {busyAssignmentId === a.id ? 'Posting…' : 'Approve & Post'}
           </Button>
         )}
         {isRequested && (

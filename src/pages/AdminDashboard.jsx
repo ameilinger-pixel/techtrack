@@ -9,7 +9,6 @@ import StatsCard from '@/components/shared/StatsCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import StatusBadge from '@/components/shared/StatusBadge';
 import {
   ClipboardList, GraduationCap, Award,
   AlertTriangle, Package, CheckCircle,
@@ -19,8 +18,16 @@ import { showNeedsAction, parseDateSafe } from '@/lib/showUtils';
 import { differenceInDays } from 'date-fns';
 import ActionCenter from '@/components/admin/ActionCenter';
 
+function useAdminOutletContext() {
+  const ctx = useOutletContext();
+  return {
+    user: /** @type {any} */ (ctx)?.user,
+    role: /** @type {any} */ (ctx)?.role,
+  };
+}
+
 export default function AdminDashboard() {
-  const { user, role } = useOutletContext();
+  const { user, role } = useAdminOutletContext();
   const navigate = useNavigate();
 
   // Redirect non-admins away immediately
@@ -30,37 +37,62 @@ export default function AdminDashboard() {
     }
   }, [role]);
 
-  if (role && role !== 'admin') return null;
+  const adminEnabled = role === 'admin';
 
   const { data: students = [], isLoading: ls } = useQuery({
     queryKey: ['admin-students'],
     queryFn: () => db.entities.Student.list(),
+    enabled: adminEnabled,
   });
   const { data: assignments = [], isLoading: la } = useQuery({
     queryKey: ['admin-assignments'],
     queryFn: () => db.entities.TechAssignment.list(),
+    enabled: adminEnabled,
   });
   const { data: badges = [], isLoading: lb } = useQuery({
     queryKey: ['admin-badges'],
     queryFn: () => db.entities.Badge.list(),
+    enabled: adminEnabled,
   });
   const { data: enrollments = [], isLoading: le } = useQuery({
     queryKey: ['admin-enrollments'],
     queryFn: () => db.entities.BadgeEnrollment.list(),
+    enabled: adminEnabled,
   });
   const { data: shows = [], isLoading: lsh } = useQuery({
     queryKey: ['admin-shows'],
     queryFn: () => db.entities.Show.list(),
+    enabled: adminEnabled,
   });
   const { data: trainings = [], isLoading: lt } = useQuery({
     queryKey: ['admin-trainings'],
     queryFn: () => db.entities.Training.list(),
+    enabled: adminEnabled,
   });
   const { data: pendingEmails = [] } = useQuery({
     queryKey: ['pending-emails'],
     queryFn: () => db.entities.PendingEmail.list('-created_date', 200),
+    enabled: adminEnabled,
   });
   const pendingEmailCount = pendingEmails.filter(e => e.status === 'pending').length;
+
+  if (!adminEnabled) {
+    // While role is still loading, show a lightweight skeleton; once we know the
+    // user is not an admin, early-return without rendering the dashboard.
+    if (role == null) {
+      return (
+        <div className="p-6 space-y-4">
+          <Skeleton className="h-10 w-48" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-28" />
+            ))}
+          </div>
+        </div>
+      );
+    }
+    return null;
+  }
 
   const isLoading = ls || la || lb || le || lsh || lt;
 
@@ -99,10 +131,46 @@ export default function AdminDashboard() {
 
       {/* Top Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-        <Link to="/students"><StatsCard title="Students" value={isLoading ? '—' : students.length} icon={GraduationCap} color="blue" /></Link>
-        <Link to="/admin/hub"><StatsCard title="Active Shows" value={isLoading ? '—' : activeShows.length} icon={Clapperboard} color="purple" /></Link>
-        <Link to="/admin/tech-assignments"><StatsCard title="Tech Assignments" value={isLoading ? '—' : assignments.length} icon={ClipboardList} color="green" /></Link>
-        <Link to="/students"><StatsCard title="Badges" value={isLoading ? '—' : badges.length} icon={Award} color="amber" /></Link>
+        <Link to="/students">
+          <StatsCard
+            title="Students"
+            value={isLoading ? '—' : students.length}
+            subtitle=""
+            icon={GraduationCap}
+            color="blue"
+            onClick={() => {}}
+          />
+        </Link>
+        <Link to="/admin/hub">
+          <StatsCard
+            title="Active Shows"
+            value={isLoading ? '—' : activeShows.length}
+            subtitle=""
+            icon={Clapperboard}
+            color="purple"
+            onClick={() => {}}
+          />
+        </Link>
+        <Link to="/admin/tech-assignments">
+          <StatsCard
+            title="Tech Assignments"
+            value={isLoading ? '—' : assignments.length}
+            subtitle=""
+            icon={ClipboardList}
+            color="green"
+            onClick={() => {}}
+          />
+        </Link>
+        <Link to="/students">
+          <StatsCard
+            title="Badges"
+            value={isLoading ? '—' : badges.length}
+            subtitle=""
+            icon={Award}
+            color="amber"
+            onClick={() => {}}
+          />
+        </Link>
       </div>
 
       {/* Action Center */}
@@ -208,6 +276,80 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Year in Review */}
+      {!isLoading && (() => {
+        const currentYear = new Date().getFullYear();
+        const yearShows = shows.filter(s => {
+          const d = s.tech_week_start || s.updated_date;
+          return d && new Date(d).getFullYear() === currentYear;
+        });
+        const yearAssignments = assignments.filter(a => {
+          const d = a.tech_week_start || a.updated_date;
+          return d && new Date(d).getFullYear() === currentYear;
+        });
+        const totalPaid = yearAssignments.reduce((sum, a) => sum + (parseFloat(a.payment_amount) || 0), 0);
+
+        // Top students by assignment count
+        const studentCounts = {};
+        yearAssignments.forEach(a => {
+          if (a.assigned_student_name) {
+            studentCounts[a.assigned_student_name] = (studentCounts[a.assigned_student_name] || 0) + 1;
+          }
+        });
+        const topStudents = Object.entries(studentCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3);
+
+        const uniqueStudents = new Set(yearAssignments.map(a => a.assigned_student_name).filter(Boolean)).size;
+
+        return (
+          <div className="mt-8">
+            <h2 className="text-base font-semibold mb-4 flex items-center gap-2">
+              <Award className="w-4 h-4 text-amber-500" />{currentYear} Year in Review
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+              <div className="bg-muted/50 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-foreground">{yearShows.length}</p>
+                <p className="text-xs text-muted-foreground mt-1">Shows supported</p>
+              </div>
+              <div className="bg-muted/50 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-foreground">{yearAssignments.length}</p>
+                <p className="text-xs text-muted-foreground mt-1">Tech assignments</p>
+              </div>
+              <div className="bg-muted/50 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-foreground">{uniqueStudents}</p>
+                <p className="text-xs text-muted-foreground mt-1">Students placed</p>
+              </div>
+              <div className="bg-muted/50 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-foreground">${totalPaid.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">Total paid out</p>
+              </div>
+            </div>
+            {topStudents.length > 0 && (
+              <div className="bg-muted/50 rounded-xl p-4">
+                <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Most Active Students</p>
+                <div className="space-y-2">
+                  {topStudents.map(([name, count], i) => (
+                    <div key={name} className="flex items-center gap-3">
+                      <span className="text-xs font-bold text-muted-foreground w-4">{i + 1}</span>
+                      <div className="flex-1 bg-background rounded-full h-6 overflow-hidden">
+                        <div
+                          className="h-full bg-primary/20 flex items-center px-3 transition-all"
+                          style={{ width: `${Math.max(20, (count / topStudents[0][1]) * 100)}%` }}
+                        >
+                          <span className="text-xs font-medium truncate">{name}</span>
+                        </div>
+                      </div>
+                      <span className="text-xs text-muted-foreground w-16 text-right">{count} show{count !== 1 ? 's' : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

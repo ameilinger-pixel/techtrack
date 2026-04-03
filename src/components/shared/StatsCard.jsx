@@ -2,7 +2,18 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-export default function StatsCard({ title, value, subtitle, icon: Icon, color = 'primary', onClick }) {
+/**
+ * @param {{
+ *  title: any,
+ *  value: any,
+ *  subtitle?: any,
+ *  icon?: any,
+ *  color?: any,
+ *  onClick?: any
+ * }} props
+ */
+export default function StatsCard(props) {
+  const { title, value, subtitle, icon: Icon, color = 'primary', onClick } = props;
   const colorMap = {
     primary: 'bg-primary/10 text-primary',
     green: 'bg-emerald-50 text-emerald-600',

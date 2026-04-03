@@ -88,6 +88,17 @@ export const AuthProvider = ({ children }) => {
     return () => subscription.unsubscribe();
   }, [hydrateFromSession]);
 
+  // Re-load profile (e.g. role) after edits in Supabase while another tab was open
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') {
+        void hydrateFromSession();
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [hydrateFromSession]);
+
   const logout = (shouldRedirect = true) => {
     setUser(null);
     setIsAuthenticated(false);

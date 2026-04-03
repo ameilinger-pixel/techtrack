@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import StatusBadge from '@/components/shared/StatusBadge';
 import EmptyState from '@/components/shared/EmptyState';
-import { Users, CheckCircle, XCircle, Loader2, Trash2 } from 'lucide-react';
+import { Users, CheckCircle, Loader2, Trash2 } from 'lucide-react';
 
 export default function ApplicantModal({
   open, onClose, assignment, applications, students, onApprove, approving, onDeleteApplication

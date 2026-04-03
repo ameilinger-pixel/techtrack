@@ -17,12 +17,11 @@ import ConfirmDialog from '@/components/shared/ConfirmDialog';
 
 import { useToast } from '@/components/ui/use-toast';
 import {
-  parseTechnicians, formatDateDisplay, directorNtpaOrgEmail,
-  mergeFormDataForSave, saveShowWithRetry
+  parseTechnicians, formatDateDisplay, directorNtpaOrgEmail, saveShowWithRetry
 } from '@/lib/showUtils';
 import {
   Save, Trash2, Archive, RotateCcw, Upload, Plus, X,
-  Loader2, Link as LinkIcon, Mail, Copy, ExternalLink
+  Loader2, Link as LinkIcon, Mail, Copy
 } from 'lucide-react';
 
 export default function ShowDetailModal({ show, open, onClose, onUpdated }) {

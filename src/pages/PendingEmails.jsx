@@ -5,9 +5,8 @@ import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { runEmailEngine } from '@/lib/emailEngine';
 import PageHeader from '@/components/shared/PageHeader';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +17,7 @@ import { format } from 'date-fns';
 
 const TRIGGER_LABELS = {
   technician_assigned: 'Technician Assigned',
+  no_tech_90_days: 'No Tech — ~90 Days Out',
   no_tech_30_days: 'No Tech — 30 Days Out',
   crew_form_overdue: 'Crew Form Overdue',
 };
@@ -61,7 +61,20 @@ export default function PendingEmails() {
 
   const handleApproveAndSend = async (email) => {
     setSending(email.id);
-    await db.integrations.Core.SendEmail({ to: email.to, subject: email.subject, body: email.body });
+    const r = await db.integrations.Core.SendEmail({
+      to: email.to,
+      subject: email.subject,
+      body: email.body,
+    });
+    if (!r.ok) {
+      toast({
+        title: 'Send failed',
+        description: r.error,
+        variant: 'destructive',
+      });
+      setSending(null);
+      return;
+    }
     await db.entities.PendingEmail.update(email.id, { status: 'sent' });
     toast({ title: `Email sent to ${email.to}` });
     refresh();

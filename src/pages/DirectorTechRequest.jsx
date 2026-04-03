@@ -210,26 +210,28 @@ export default function DirectorTechRequest() {
       show_files: formData.show_files || [],
     });
 
-    // Email notifications (best effort)
+    // Email notifications (best effort — Edge Function may be offline)
     try {
       const adminUsers = await db.entities.User.filter({ role: "admin" });
       const adminEmail = adminUsers?.[0]?.email;
       if (adminEmail) {
-        await db.integrations.Core.SendEmail({
+        const r1 = await db.integrations.Core.SendEmail({
           to: adminEmail,
           subject: `New Tech Request: ${formData.show_title}`,
           body: `A new tech request has been submitted:<br><br><strong>Show:</strong> ${formData.show_title}<br><strong>Director:</strong> ${formData.director_name}<br><strong>Help needed:</strong> ${tech_needs_description}<br><strong>Specific Request:</strong> ${formData.specific_tech_request || "None"}<br><br>Please review the request in the admin dashboard.`,
         });
+        if (!r1.ok) console.warn("Admin notify failed:", r1.error);
       }
       if (formData.director_email) {
-        await db.integrations.Core.SendEmail({
+        const r2 = await db.integrations.Core.SendEmail({
           to: formData.director_email,
           subject: `Tech Request Received: ${formData.show_title}`,
           body: `Hi ${formData.director_name.split(" ")[0]},<br><br>We've received your tech request for <strong>${formData.show_title}</strong>.<br><br>Our admin team will review and assign technicians. You'll be notified once confirmed.<br><br>Best regards,<br>NTPA TechTrack Team`,
         });
+        if (!r2.ok) console.warn("Director confirm email failed:", r2.error);
       }
     } catch (emailErr) {
-      console.warn('Email notification failed:', emailErr);
+      console.warn("Email notification failed:", emailErr);
     }
 
     setSaving(false);
