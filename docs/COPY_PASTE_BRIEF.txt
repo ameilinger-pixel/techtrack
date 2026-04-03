@@ -1,0 +1,7 @@
+TechTrack — quick context for an AI helper
+
+WHAT IT IS
+TechTrack is a web app for running theatre tech crew: shows, directors asking for tech help, posting student applications, assigning technicians, email templates and a queue for reminders, plus student and resource directories. It’s built with React and Supabase. I’m the only person running the whole process.
+
+WHAT I’M TRYING TO GET TO OVERALL
+I want one place that holds the real picture—fewer Google Forms, fewer Classroom links, and less tracking due dates in my head. Directors should easily see their shows and what’s happening; I should quickly see what needs my attention next, with gentle nudges (like before tech week) so I’m not rewriting the same emails. I’m not asking you to throw away what’s built—I want help making it smoother and closer to that “one home base” idea.
