@@ -22,6 +22,8 @@ import { differenceInDays } from 'date-fns';
 import { parseDateSafe } from '@/lib/showUtils';
 import { showNeedsAction, getUrgencyBucket, crewCount } from '@/lib/showUtils';
 
+import { useToast } from '@/components/ui/use-toast';
+
 export default function AdminHub() {
   const [search, setSearch] = useState('');
   const [selectedShow, setSelectedShow] = useState(null);
@@ -49,6 +51,8 @@ export default function AdminHub() {
   const pendingTrainingProposals = trainings.filter(t => t.status === 'proposed').length;
   const pendingBadgeReviews = enrollments.filter(e => e.status === 'pending_review').length;
 
+  const { toast } = useToast();
+
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['hub-shows'] });
     queryClient.invalidateQueries({ queryKey: ['hub-assignments'] });
@@ -56,19 +60,31 @@ export default function AdminHub() {
 
   const handleMarkContacted = async (e, showId) => {
     e.stopPropagation();
-    const today = new Date().toISOString().split('T')[0];
-    await db.entities.Show.update(showId, { director_contacted_date: today });
-    refresh();
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      await db.entities.Show.update(showId, { director_contacted_date: today });
+      refresh();
+      toast({ title: 'Director marked as contacted' });
+    } catch (err) {
+      console.error('[handleMarkContacted]', err);
+      toast({ title: 'Failed to save', description: err?.message || 'Unknown error', variant: 'destructive' });
+    }
   };
 
   const handleCreatePosting = async (e, showId) => {
     e.stopPropagation();
-    const today = new Date().toISOString().split('T')[0];
-    await db.entities.Show.update(showId, {
-      posting_created_date: today,
-      workflow_status: 'posting_open',
-    });
-    refresh();
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      await db.entities.Show.update(showId, {
+        posting_created_date: today,
+        workflow_status: 'posting_open',
+      });
+      refresh();
+      toast({ title: 'Application posting recorded' });
+    } catch (err) {
+      console.error('[handleCreatePosting]', err);
+      toast({ title: 'Failed to save', description: err?.message || 'Unknown error', variant: 'destructive' });
+    }
   };
 
   const filteredShows = shows.filter(s => {

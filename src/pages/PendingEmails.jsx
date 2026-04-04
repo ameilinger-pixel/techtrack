@@ -54,31 +54,48 @@ export default function PendingEmails() {
 
   const handleScan = async () => {
     setScanning(true);
-    const queued = await runEmailEngine(assignments, templates, emails);
-    refresh();
-    toast({ title: queued.length > 0 ? `${queued.length} new email${queued.length !== 1 ? 's' : ''} queued for review` : 'No new emails to queue' });
-    setScanning(false);
+    try {
+      const queued = await runEmailEngine(assignments, templates, emails);
+      refresh();
+      toast({ title: queued.length > 0 ? `${queued.length} new email${queued.length !== 1 ? 's' : ''} queued for review` : 'No new emails to queue' });
+    } catch (err) {
+      console.error('[handleScan]', err);
+      toast({ title: 'Scan failed', description: err?.message || 'Unknown error', variant: 'destructive' });
+    } finally {
+      setScanning(false);
+    }
   };
 
   const handleApproveAndSend = async (email) => {
     setSending(email.id);
-    const bodyToSend = email.id === preview?.id ? editedBody : email.body;
-    if (bodyToSend !== email.body) {
-      await db.entities.PendingEmail.update(email.id, { body: bodyToSend });
+    try {
+      const bodyToSend = email.id === preview?.id ? editedBody : email.body;
+      if (bodyToSend !== email.body) {
+        await db.entities.PendingEmail.update(email.id, { body: bodyToSend });
+      }
+      await db.integrations.Core.SendEmail({ to: email.to, subject: email.subject, body: bodyToSend });
+      await db.entities.PendingEmail.update(email.id, { status: 'sent' });
+      toast({ title: `Email sent to ${email.to}` });
+      refresh();
+      setPreview(null);
+    } catch (err) {
+      console.error('[handleApproveAndSend]', err);
+      toast({ title: 'Failed to send', description: err?.message || 'Unknown error', variant: 'destructive' });
+    } finally {
+      setSending(null);
     }
-    await db.integrations.Core.SendEmail({ to: email.to, subject: email.subject, body: bodyToSend });
-    await db.entities.PendingEmail.update(email.id, { status: 'sent' });
-    toast({ title: `Email sent to ${email.to}` });
-    refresh();
-    setPreview(null);
-    setSending(null);
   };
 
   const handleReject = async (email) => {
-    await db.entities.PendingEmail.update(email.id, { status: 'rejected' });
-    toast({ title: 'Email rejected' });
-    refresh();
-    setPreview(null);
+    try {
+      await db.entities.PendingEmail.update(email.id, { status: 'rejected' });
+      toast({ title: 'Email rejected' });
+      refresh();
+      setPreview(null);
+    } catch (err) {
+      console.error('[handleReject]', err);
+      toast({ title: 'Failed to reject', description: err?.message || 'Unknown error', variant: 'destructive' });
+    }
   };
 
   const pending = emails.filter(e => e.status === 'pending');

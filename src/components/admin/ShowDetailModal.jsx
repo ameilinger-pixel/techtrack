@@ -50,39 +50,65 @@ export default function ShowDetailModal({ show, open, onClose, onUpdated }) {
 
   const handleSave = async () => {
     setSaving(true);
-    await saveShowWithRetry(db.entities.Show, show.id, form);
-    toast({ title: 'Show saved' });
-    onUpdated?.();
-    setSaving(false);
-    onClose();
+    try {
+      await saveShowWithRetry(db.entities.Show, show.id, form);
+      toast({ title: 'Show saved' });
+      onUpdated?.();
+      onClose();
+    } catch (err) {
+      console.error('[handleSave]', err);
+      toast({ title: 'Failed to save', description: err?.message || 'Unknown error', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async () => {
-    await db.entities.Show.delete(show.id);
-    toast({ title: 'Show deleted' });
-    onUpdated?.();
-    onClose();
+    try {
+      await db.entities.Show.delete(show.id);
+      toast({ title: 'Show deleted' });
+      onUpdated?.();
+      onClose();
+    } catch (err) {
+      console.error('[handleDelete]', err);
+      toast({ title: 'Failed to delete', description: err?.message || 'Unknown error', variant: 'destructive' });
+    }
   };
 
   const handleArchive = async () => {
-    await db.entities.Show.update(show.id, { status: 'archived' });
-    toast({ title: 'Show archived' });
-    onUpdated?.();
-    onClose();
+    try {
+      await db.entities.Show.update(show.id, { status: 'archived' });
+      toast({ title: 'Show archived' });
+      onUpdated?.();
+      onClose();
+    } catch (err) {
+      console.error('[handleArchive]', err);
+      toast({ title: 'Failed to archive', description: err?.message || 'Unknown error', variant: 'destructive' });
+    }
   };
 
   const handleRestore = async () => {
-    await db.entities.Show.update(show.id, { status: 'upcoming' });
-    toast({ title: 'Show restored' });
-    onUpdated?.();
+    try {
+      await db.entities.Show.update(show.id, { status: 'upcoming' });
+      toast({ title: 'Show restored' });
+      onUpdated?.();
+    } catch (err) {
+      console.error('[handleRestore]', err);
+      toast({ title: 'Failed to restore', description: err?.message || 'Unknown error', variant: 'destructive' });
+    }
   };
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const { file_url } = await db.integrations.Core.UploadFile({ file });
-    const newFiles = [...(form.show_files || []), { name: file.name, url: file_url, category: 'general' }];
-    update('show_files', newFiles);
+    try {
+      const { file_url } = await db.integrations.Core.UploadFile({ file });
+      const newFiles = [...(form.show_files || []), { name: file.name, url: file_url, category: 'general' }];
+      update('show_files', newFiles);
+    } catch (err) {
+      console.error('[handleFileUpload]', err);
+      toast({ title: 'Upload failed', description: err?.message || 'Unknown error', variant: 'destructive' });
+    }
   };
 
   const removeFile = (idx) => {

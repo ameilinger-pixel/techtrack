@@ -142,12 +142,17 @@ export default function CommandCenter() {
     scannedRef.current = true;
     (async () => {
       setScanning(true);
-      const queued = await runEmailEngine(assignments, templates, pendingEmails);
-      if (queued.length) {
-        toast({ title: `${queued.length} new email${queued.length !== 1 ? 's' : ''} queued` });
-        qc.invalidateQueries({ queryKey: ['cc-pending-emails'] });
+      try {
+        const queued = await runEmailEngine(assignments, templates, pendingEmails);
+        if (queued.length) {
+          toast({ title: `${queued.length} new email${queued.length !== 1 ? 's' : ''} queued` });
+          qc.invalidateQueries({ queryKey: ['cc-pending-emails'] });
+        }
+      } catch (err) {
+        console.error('[auto-scan]', err);
+      } finally {
+        setScanning(false);
       }
-      setScanning(false);
     })();
   }, [assignments.length, templates.length]);
 
@@ -191,20 +196,30 @@ export default function CommandCenter() {
 
   // ── inline action handlers ──
   const handleMarkContacted = async (showId, actionKey) => {
-    await db.entities.Show.update(showId, { director_contacted_date: today.toISOString().slice(0, 10) });
-    dismiss(actionKey);
-    refresh();
-    toast({ title: 'Director marked as contacted' });
+    try {
+      await db.entities.Show.update(showId, { director_contacted_date: today.toISOString().slice(0, 10) });
+      dismiss(actionKey);
+      refresh();
+      toast({ title: 'Director marked as contacted' });
+    } catch (err) {
+      console.error('[handleMarkContacted]', err);
+      toast({ title: 'Failed to save', description: err?.message || 'Unknown error', variant: 'destructive' });
+    }
   };
 
   const handleMarkPosted = async (showId, actionKey) => {
-    await db.entities.Show.update(showId, {
-      posting_created_date: today.toISOString().slice(0, 10),
-      workflow_status: 'posting_open',
-    });
-    dismiss(actionKey);
-    refresh();
-    toast({ title: 'Application posting recorded' });
+    try {
+      await db.entities.Show.update(showId, {
+        posting_created_date: today.toISOString().slice(0, 10),
+        workflow_status: 'posting_open',
+      });
+      dismiss(actionKey);
+      refresh();
+      toast({ title: 'Application posting recorded' });
+    } catch (err) {
+      console.error('[handleMarkPosted]', err);
+      toast({ title: 'Failed to save', description: err?.message || 'Unknown error', variant: 'destructive' });
+    }
   };
 
   const dismiss = (key) => {
@@ -221,22 +236,33 @@ export default function CommandCenter() {
 
   const handleSend = async (email) => {
     setSending(email.id);
-    const body = editedBody || email.body;
-    if (body !== email.body) await db.entities.PendingEmail.update(email.id, { body });
-    await db.integrations.Core.SendEmail({ to: email.to, subject: email.subject, body });
-    await db.entities.PendingEmail.update(email.id, { status: 'sent' });
-    toast({ title: `Sent to ${email.to}` });
-    setPreviewEmail(null);
-    setEditedBody('');
-    setSending(null);
-    refresh();
+    try {
+      const body = editedBody || email.body;
+      if (body !== email.body) await db.entities.PendingEmail.update(email.id, { body });
+      await db.integrations.Core.SendEmail({ to: email.to, subject: email.subject, body });
+      await db.entities.PendingEmail.update(email.id, { status: 'sent' });
+      toast({ title: `Sent to ${email.to}` });
+      setPreviewEmail(null);
+      setEditedBody('');
+      refresh();
+    } catch (err) {
+      console.error('[handleSend]', err);
+      toast({ title: 'Failed to send email', description: err?.message || 'Unknown error', variant: 'destructive' });
+    } finally {
+      setSending(null);
+    }
   };
 
   const handleReject = async (email) => {
-    await db.entities.PendingEmail.update(email.id, { status: 'rejected' });
-    toast({ title: 'Email rejected' });
-    setPreviewEmail(null);
-    refresh();
+    try {
+      await db.entities.PendingEmail.update(email.id, { status: 'rejected' });
+      toast({ title: 'Email rejected' });
+      setPreviewEmail(null);
+      refresh();
+    } catch (err) {
+      console.error('[handleReject]', err);
+      toast({ title: 'Failed to reject', description: err?.message || 'Unknown error', variant: 'destructive' });
+    }
   };
 
   // ── render ──
