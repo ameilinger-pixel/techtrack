@@ -127,10 +127,14 @@ export default function ApplyForAssignment() {
           </div>
           <CardTitle className="text-2xl">Application Submitted!</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <p className="text-muted-foreground">
             Thanks, <strong>{form.student_name}</strong>! Your application for <strong>{assignment.show_title}</strong> has been received. The admin team will be in touch.
           </p>
+          <a href={`/profile?email=${encodeURIComponent(form.student_email)}`}
+            className="inline-flex items-center gap-2 text-sm text-primary hover:underline font-medium">
+            View your profile &amp; application history →
+          </a>
         </CardContent>
       </Card>
     </div>

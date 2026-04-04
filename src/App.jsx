@@ -21,6 +21,7 @@ import DirectorShowPortal from '@/pages/DirectorShowPortal';
 import DirectorHub from '@/pages/DirectorHub';
 import ImportShows from '@/pages/ImportShows';
 import ApplyForAssignment from '@/pages/ApplyForAssignment';
+import StudentProfile from '@/pages/StudentProfile';
 import EmailTemplates from '@/pages/EmailTemplates';
 import PendingEmails from '@/pages/PendingEmails';
 import DirectorPortal from '@/pages/DirectorPortal';
@@ -48,7 +49,8 @@ const AuthenticatedApp = () => {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
       // Only redirect to login for non-public routes
-      const isPublicRoute = window.location.pathname.startsWith('/apply');
+      const isPublicRoute = window.location.pathname.startsWith('/apply') ||
+                            window.location.pathname.startsWith('/profile');
       if (!isPublicRoute) {
         navigateToLogin();
       }
@@ -85,6 +87,7 @@ function App() {
       <Router>
         <Routes>
           <Route path="/apply" element={<ApplyForAssignment />} />
+          <Route path="/profile" element={<StudentProfile />} />
           <Route path="/login" element={<Login />} />
           <Route path="/director/portal" element={<DirectorPortal />} />
           <Route path="*" element={
