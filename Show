@@ -1,0 +1,189 @@
+{
+  "name": "Show",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Show title"
+    },
+    "theater": {
+      "type": "string",
+      "description": "Theater/venue name"
+    },
+    "director_name": {
+      "type": "string",
+      "description": "Director full name"
+    },
+    "director_email": {
+      "type": "string",
+      "description": "Director email"
+    },
+    "director_phone": {
+      "type": "string"
+    },
+    "tech_week_start": {
+      "type": "string",
+      "format": "date",
+      "description": "Tech week start date"
+    },
+    "tech_week_end": {
+      "type": "string",
+      "format": "date"
+    },
+    "opening_night": {
+      "type": "string",
+      "format": "date"
+    },
+    "show_dates": {
+      "type": "string",
+      "description": "Performance dates text"
+    },
+    "tech_rehearsal_times": {
+      "type": "string",
+      "description": "Rehearsal schedule"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "upcoming",
+        "in_progress",
+        "completed",
+        "archived"
+      ],
+      "default": "upcoming"
+    },
+    "workflow_status": {
+      "type": "string",
+      "enum": [
+        "needs_director_contact",
+        "awaiting_form",
+        "needs_director_notify",
+        "posting_open",
+        "posting_created",
+        "assigned",
+        "in_progress",
+        "completed"
+      ],
+      "default": "needs_director_contact"
+    },
+    "assigned_technicians": {
+      "type": "array",
+      "description": "Crew array with name, email, role, payment fields",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "payment_amount": {
+            "type": "number"
+          },
+          "payment_status": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "assigned_technician_name": {
+      "type": "string"
+    },
+    "assigned_technician_email": {
+      "type": "string"
+    },
+    "assigned_technician_role": {
+      "type": "string"
+    },
+    "assigned_technician_payment": {
+      "type": "number"
+    },
+    "payment_amount": {
+      "type": "number",
+      "description": "Sum of all crew payments"
+    },
+    "needs_technician": {
+      "type": "boolean",
+      "default": true
+    },
+    "tech_support_declined": {
+      "type": "boolean",
+      "default": false
+    },
+    "director_contacted_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "director_notified_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "posting_created_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "application_link_url": {
+      "type": "string"
+    },
+    "show_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "equipment_needs": {
+      "type": "string"
+    },
+    "needs_lighting": {
+      "type": "boolean",
+      "default": false
+    },
+    "needs_sound": {
+      "type": "boolean",
+      "default": false
+    },
+    "needs_projection": {
+      "type": "boolean",
+      "default": false
+    },
+    "needs_rigging": {
+      "type": "boolean",
+      "default": false
+    },
+    "equipment_reserved": {
+      "type": "boolean",
+      "default": false
+    },
+    "equipment_returned": {
+      "type": "boolean",
+      "default": false
+    },
+    "tech_needs_description": {
+      "type": "string"
+    },
+    "schedule_notes": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title"
+  ]
+}

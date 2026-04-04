@@ -1,0 +1,42 @@
+{
+  "name": "TechApplication",
+  "type": "object",
+  "properties": {
+    "assignment_id": {
+      "type": "string"
+    },
+    "student_id": {
+      "type": "string"
+    },
+    "student_name": {
+      "type": "string"
+    },
+    "student_email": {
+      "type": "string"
+    },
+    "cover_letter": {
+      "type": "string"
+    },
+    "experience": {
+      "type": "string"
+    },
+    "availability_notes": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected",
+        "withdrawn"
+      ],
+      "default": "pending"
+    }
+  },
+  "required": [
+    "assignment_id",
+    "student_name",
+    "student_email"
+  ]
+}

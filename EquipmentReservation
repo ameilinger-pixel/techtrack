@@ -1,0 +1,47 @@
+{
+  "name": "EquipmentReservation",
+  "type": "object",
+  "properties": {
+    "equipment_id": {
+      "type": "string"
+    },
+    "equipment_name": {
+      "type": "string"
+    },
+    "show_id": {
+      "type": "string"
+    },
+    "show_title": {
+      "type": "string"
+    },
+    "start_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "end_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "quantity": {
+      "type": "number",
+      "default": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "reserved",
+        "checked_out",
+        "returned",
+        "cancelled"
+      ],
+      "default": "reserved"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "equipment_id",
+    "show_id"
+  ]
+}

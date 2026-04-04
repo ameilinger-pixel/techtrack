@@ -1,0 +1,55 @@
+{
+  "name": "PendingEmail",
+  "type": "object",
+  "properties": {
+    "trigger": {
+      "type": "string",
+      "description": "e.g. technician_assigned, no_tech_30_days, crew_form_overdue"
+    },
+    "template_id": {
+      "type": "string"
+    },
+    "template_name": {
+      "type": "string"
+    },
+    "assignment_id": {
+      "type": "string"
+    },
+    "show_title": {
+      "type": "string"
+    },
+    "to": {
+      "type": "string",
+      "description": "Recipient email"
+    },
+    "to_name": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "body": {
+      "type": "string",
+      "description": "HTML body with placeholders already substituted"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected",
+        "sent"
+      ],
+      "default": "pending"
+    },
+    "admin_notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "trigger",
+    "to",
+    "subject",
+    "body"
+  ]
+}

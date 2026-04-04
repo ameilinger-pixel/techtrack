@@ -1,0 +1,181 @@
+{
+  "name": "TechAssignment",
+  "type": "object",
+  "properties": {
+    "show_title": {
+      "type": "string"
+    },
+    "show_id": {
+      "type": "string"
+    },
+    "director_name": {
+      "type": "string"
+    },
+    "director_email": {
+      "type": "string"
+    },
+    "theater": {
+      "type": "string"
+    },
+    "troupe": {
+      "type": "string",
+      "description": "Troupe name e.g. 'Plano Senior High'"
+    },
+    "tech_week_start": {
+      "type": "string",
+      "format": "date"
+    },
+    "tech_week_end": {
+      "type": "string",
+      "format": "date"
+    },
+    "opening_night": {
+      "type": "string",
+      "format": "date"
+    },
+    "rehearsal_schedule": {
+      "type": "string",
+      "description": "Rehearsal dates, times & locations"
+    },
+    "tech_week_schedule": {
+      "type": "string",
+      "description": "Tech week dates, times & location"
+    },
+    "show_dates": {
+      "type": "string",
+      "description": "Performance dates & times with call time"
+    },
+    "tech_rehearsal_times": {
+      "type": "string",
+      "description": "Legacy combined rehearsal/tech week field"
+    },
+    "tech_needs_description": {
+      "type": "string"
+    },
+    "positions": {
+      "type": "array",
+      "description": "List of positions with per-position level and badge requirements",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "badges": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "roles_needed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "skill_level": {
+      "type": "string",
+      "enum": [
+        "beginner",
+        "intermediate",
+        "advanced",
+        "any"
+      ],
+      "default": "any"
+    },
+    "skill_preferences": {
+      "type": "string"
+    },
+    "light_plot_available": {
+      "type": "boolean",
+      "default": false
+    },
+    "shadow_opportunity": {
+      "type": "boolean",
+      "default": false
+    },
+    "notes": {
+      "type": "string"
+    },
+    "show_files": {
+      "type": "array",
+      "description": "Files attached by director: light plots, cue sheets, scripts, etc.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "uploaded_at": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending_admin_approval",
+        "requested",
+        "assigned",
+        "confirmed",
+        "completed",
+        "cancelled"
+      ],
+      "default": "pending_admin_approval"
+    },
+    "assigned_student_id": {
+      "type": "string"
+    },
+    "assigned_student_name": {
+      "type": "string"
+    },
+    "assigned_student_email": {
+      "type": "string"
+    },
+    "payment_amount": {
+      "type": "number"
+    },
+    "payment_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "paid",
+        "not_applicable"
+      ],
+      "default": "pending"
+    },
+    "director_verification": {
+      "type": "boolean",
+      "default": false
+    },
+    "student_pay_confirmation": {
+      "type": "boolean",
+      "default": false
+    },
+    "policy_acknowledged": {
+      "type": "boolean",
+      "default": false
+    },
+    "crew_assignment_form_submitted": {
+      "type": "boolean",
+      "default": false
+    },
+    "crew_assignment_form_due": {
+      "type": "string",
+      "format": "date"
+    }
+  },
+  "required": [
+    "show_title"
+  ]
+}

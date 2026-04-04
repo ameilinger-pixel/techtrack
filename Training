@@ -1,0 +1,51 @@
+{
+  "name": "Training",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "trainer_name": {
+      "type": "string"
+    },
+    "trainer_email": {
+      "type": "string"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "time": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    },
+    "capacity": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "proposed",
+        "approved",
+        "scheduled",
+        "completed",
+        "cancelled"
+      ],
+      "default": "proposed"
+    },
+    "category": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title"
+  ]
+}

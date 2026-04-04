@@ -1,0 +1,46 @@
+{
+  "name": "BadgeEnrollment",
+  "type": "object",
+  "properties": {
+    "badge_id": {
+      "type": "string"
+    },
+    "badge_name": {
+      "type": "string"
+    },
+    "student_id": {
+      "type": "string"
+    },
+    "student_name": {
+      "type": "string"
+    },
+    "student_email": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "enrolled",
+        "in_progress",
+        "pending_review",
+        "completed",
+        "rejected"
+      ],
+      "default": "enrolled"
+    },
+    "evidence_url": {
+      "type": "string"
+    },
+    "reviewer_notes": {
+      "type": "string"
+    },
+    "completed_date": {
+      "type": "string",
+      "format": "date"
+    }
+  },
+  "required": [
+    "badge_id",
+    "student_id"
+  ]
+}
