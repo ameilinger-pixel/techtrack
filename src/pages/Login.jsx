@@ -11,8 +11,6 @@ import { useToast } from '@/components/ui/use-toast';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [mode, setMode] = useState('signin');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -80,93 +78,40 @@ export default function Login() {
         <CardHeader>
           <CardTitle>TechTrack</CardTitle>
           <CardDescription>
-            {mode === 'signin' ? 'Sign in with your account' : 'Create an account'}
+            Sign in with your email and password
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {mode === 'signin' ? (
-            <form onSubmit={onSignIn} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(ev) => setEmail(ev.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(ev) => setPassword(ev.target.value)}
-                  required
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Signing in…' : 'Sign in'}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full"
-                onClick={() => setMode('signup')}
-              >
-                Need an account? Sign up
-              </Button>
-            </form>
-          ) : (
-            <form onSubmit={onSignUp} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="fullName">Full name</Label>
-                <Input
-                  id="fullName"
-                  value={fullName}
-                  onChange={(ev) => setFullName(ev.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="su-email">Email</Label>
-                <Input
-                  id="su-email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(ev) => setEmail(ev.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="su-password">Password</Label>
-                <Input
-                  id="su-password"
-                  type="password"
-                  autoComplete="new-password"
-                  value={password}
-                  onChange={(ev) => setPassword(ev.target.value)}
-                  required
-                  minLength={6}
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Creating…' : 'Create account'}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full"
-                onClick={() => setMode('signin')}
-              >
-                Back to sign in
-              </Button>
-            </form>
-          )}
+          <form onSubmit={onSignIn} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(ev) => setEmail(ev.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(ev) => setPassword(ev.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Signing in…' : 'Sign in'}
+            </Button>
+            <p className="text-center text-xs text-muted-foreground pt-1">
+              Don't have an account? Contact your TechTrack administrator.
+            </p>
+          </form>
         </CardContent>
       </Card>
     </div>

@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes, useOutletContext } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useOutletContext, Navigate } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -29,7 +29,7 @@ import Login from '@/pages/Login';
 
 const RoleBasedHome = () => {
   const { role } = useOutletContext?.() || {};
-  if (role === 'director') return <DirectorDashboard />;
+  if (role === 'director') return <Navigate to="/director/portal" replace />;
   return <CommandCenter />;
 };
 
@@ -48,7 +48,6 @@ const AuthenticatedApp = () => {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
-      // Only redirect to login for non-public routes
       const isPublicRoute = window.location.pathname.startsWith('/apply') ||
                             window.location.pathname.startsWith('/profile');
       if (!isPublicRoute) {
@@ -72,6 +71,7 @@ const AuthenticatedApp = () => {
         <Route path="/director/request-tech" element={<DirectorTechRequest />} />
         <Route path="/director/show-portal" element={<DirectorShowPortal />} />
         <Route path="/director/hub" element={<DirectorHub />} />
+        <Route path="/director/portal" element={<DirectorPortal />} />
         <Route path="/admin/import-shows" element={<ImportShows />} />
         <Route path="/admin/email-templates" element={<EmailTemplates />} />
         <Route path="/admin/pending-emails" element={<PendingEmails />} />
@@ -89,7 +89,6 @@ function App() {
           <Route path="/apply" element={<ApplyForAssignment />} />
           <Route path="/profile" element={<StudentProfile />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/director/portal" element={<DirectorPortal />} />
           <Route path="*" element={
             <AuthProvider>
               <AuthenticatedApp />

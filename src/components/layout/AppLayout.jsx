@@ -27,7 +27,7 @@ export default function AppLayout() {
         setRole(r);
         // Redirect directors away from any non-director page
         if (r === 'director' && !location.pathname.startsWith('/director')) {
-          navigate('/director', { replace: true });
+          navigate('/director/portal', { replace: true });
           setLoading(false);
           return;
         }
