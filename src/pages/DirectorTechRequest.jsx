@@ -337,12 +337,14 @@ export default function DirectorTechRequest() {
             <CardTitle className="text-base flex items-center gap-2"><Clock className="w-4 h-4" />Tech Week</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">Enter the first and last day of tech week and the daily hours. We'll apply those times to each day in that range.</p>
+            <p className="text-sm text-muted-foreground">
+              Step 1: Enter Tech Week dates and times in this order: start date, end date, start time, end time.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Tech start date *</Label><Input type="date" value={formData.tech_week.start_date} onChange={e => handleTechWeekChange("start_date", e.target.value)} required /></div>
-              <div className="space-y-2"><Label>Tech end date *</Label><Input type="date" value={formData.tech_week.end_date} onChange={e => handleTechWeekChange("end_date", e.target.value)} required /></div>
-              <div className="space-y-2"><Label>Daily start time *</Label><Input type="time" value={formData.tech_week.start_time} onChange={e => handleTechWeekChange("start_time", e.target.value)} required /></div>
-              <div className="space-y-2"><Label>Daily end time *</Label><Input type="time" value={formData.tech_week.end_time} onChange={e => handleTechWeekChange("end_time", e.target.value)} required /></div>
+              <div className="space-y-2"><Label>Tech Week Start Date *</Label><Input type="date" value={formData.tech_week.start_date} onChange={e => handleTechWeekChange("start_date", e.target.value)} required /></div>
+              <div className="space-y-2"><Label>Tech Week End Date *</Label><Input type="date" value={formData.tech_week.end_date} onChange={e => handleTechWeekChange("end_date", e.target.value)} required /></div>
+              <div className="space-y-2"><Label>Tech Week Start Time *</Label><Input type="time" value={formData.tech_week.start_time} onChange={e => handleTechWeekChange("start_time", e.target.value)} required /></div>
+              <div className="space-y-2"><Label>Tech Week End Time *</Label><Input type="time" value={formData.tech_week.end_time} onChange={e => handleTechWeekChange("end_time", e.target.value)} required /></div>
             </div>
           </CardContent>
         </Card>
@@ -352,7 +354,9 @@ export default function DirectorTechRequest() {
             <CardTitle className="text-base flex items-center gap-2"><Calendar className="w-4 h-4" />Performances</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">Add each performance: date, call time, and curtain time.</p>
+            <p className="text-sm text-muted-foreground">
+              Step 2: Click Add for each performance and enter Date, Call Time, and Curtain Time.
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
               <div className="sm:col-span-4 space-y-2"><Label>Date</Label><Input type="date" value={newPerformance.date} onChange={e => setNewPerformance(p => ({ ...p, date: e.target.value }))} /></div>
               <div className="sm:col-span-3 space-y-2"><Label>Call time</Label><Input type="time" value={newPerformance.call_time} onChange={e => setNewPerformance(p => ({ ...p, call_time: e.target.value }))} /></div>
