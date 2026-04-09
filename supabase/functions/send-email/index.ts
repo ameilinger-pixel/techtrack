@@ -6,6 +6,90 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+function toBase64Url(input: string) {
+  const bytes = new TextEncoder().encode(input);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function toBase64(input: string) {
+  const bytes = new TextEncoder().encode(input);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+function encodeMimeHeader(value: string) {
+  // RFC 2047 encoded-word for non-ASCII headers (fixes mojibake in subjects)
+  return /[^\x00-\x7F]/.test(value) ? `=?UTF-8?B?${toBase64(value)}?=` : value;
+}
+
+async function sendViaGmailApi({
+  to,
+  subject,
+  html,
+}: {
+  to: string;
+  subject: string;
+  html: string;
+}) {
+  const clientId = Deno.env.get('GMAIL_CLIENT_ID');
+  const clientSecret = Deno.env.get('GMAIL_CLIENT_SECRET');
+  const refreshToken = Deno.env.get('GMAIL_REFRESH_TOKEN');
+  const fromAddr = Deno.env.get('GMAIL_FROM');
+
+  if (!clientId || !clientSecret || !refreshToken || !fromAddr) {
+    throw new Error('Gmail API is not fully configured');
+  }
+
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }),
+  });
+
+  const tokenPayload = await tokenRes.json().catch(() => ({}));
+  if (!tokenRes.ok || !tokenPayload?.access_token) {
+    console.error('Gmail token error', tokenPayload);
+    throw new Error(tokenPayload?.error_description ?? tokenPayload?.error ?? 'Failed to obtain Gmail access token');
+  }
+
+  const mime = [
+    `From: ${fromAddr}`,
+    `To: ${to}`,
+    `Subject: ${encodeMimeHeader(subject)}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/html; charset=UTF-8',
+    '',
+    html,
+  ].join('\r\n');
+
+  const raw = toBase64Url(mime);
+
+  const sendRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${tokenPayload.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ raw }),
+  });
+
+  const sendPayload = await sendRes.json().catch(() => ({}));
+  if (!sendRes.ok) {
+    console.error('Gmail send error', sendPayload);
+    throw new Error(sendPayload?.error?.message ?? 'Gmail send failed');
+  }
+
+  return { id: sendPayload.id };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -54,41 +138,60 @@ Deno.serve(async (req) => {
       }
     }
 
-    const resendKey = Deno.env.get('RESEND_API_KEY');
-    const fromAddr = Deno.env.get('RESEND_FROM') ?? 'onboarding@resend.dev';
+    const provider = (Deno.env.get('EMAIL_PROVIDER') ?? '').trim().toLowerCase();
+    let result: { id?: string } | null = null;
 
-    if (!resendKey) {
-      console.error('RESEND_API_KEY is not set');
-      return new Response(JSON.stringify({ error: 'Email provider not configured' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (provider === 'gmail') {
+      result = await sendViaGmailApi({ to, subject, html });
+    } else {
+      const resendKey = Deno.env.get('RESEND_API_KEY');
+      const fromAddr = Deno.env.get('RESEND_FROM') ?? 'onboarding@resend.dev';
+
+      if (!resendKey) {
+        // Automatic Gmail fallback if Gmail secrets are present.
+        const hasGmailCreds = !!(
+          Deno.env.get('GMAIL_CLIENT_ID') &&
+          Deno.env.get('GMAIL_CLIENT_SECRET') &&
+          Deno.env.get('GMAIL_REFRESH_TOKEN') &&
+          Deno.env.get('GMAIL_FROM')
+        );
+        if (hasGmailCreds) {
+          result = await sendViaGmailApi({ to, subject, html });
+        } else {
+          console.error('No email provider configured');
+          return new Response(JSON.stringify({ error: 'Email provider not configured (set Resend or Gmail secrets)' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      } else {
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${resendKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: fromAddr,
+            to: [to],
+            subject,
+            html,
+          }),
+        });
+
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          console.error('Resend error', payload);
+          return new Response(JSON.stringify({ error: payload.message ?? 'Resend failed' }), {
+            status: 502,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        result = { id: payload.id };
+      }
     }
 
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${resendKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: fromAddr,
-        to: [to],
-        subject,
-        html,
-      }),
-    });
-
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      console.error('Resend error', payload);
-      return new Response(JSON.stringify({ error: payload.message ?? 'Resend failed' }), {
-        status: 502,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    return new Response(JSON.stringify({ ok: true, id: payload.id }), {
+    return new Response(JSON.stringify({ ok: true, id: result?.id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e) {

@@ -7,7 +7,10 @@ React + Vite app using **Supabase** for Postgres, auth, storage, and optional Ed
 1. `npm install`
 2. Create a [Supabase](https://supabase.com) project. Run the SQL in `supabase/migrations/20260401140000_initial_schema.sql` (SQL Editor or `supabase db push`).
 3. Copy `.env.example` to `.env.local` and set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` from Project Settings → API.
-4. Deploy the `send-email` Edge Function (`supabase/functions/send-email`) and set secrets: `RESEND_API_KEY`, `RESEND_FROM` (optional), or email sending will fail until configured.
+4. Deploy the `send-email` Edge Function (`supabase/functions/send-email`) and configure one provider:
+   - **Resend**: `RESEND_API_KEY`, `RESEND_FROM` (optional), or
+   - **Gmail API**: `EMAIL_PROVIDER=gmail`, `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `GMAIL_FROM`
+   - If `EMAIL_PROVIDER` is not set, function uses Resend when available and falls back to Gmail if Gmail secrets are present.
 5. Enable **Email** provider with password sign-in in Supabase → Authentication → Providers.
 6. `npm run dev`
 

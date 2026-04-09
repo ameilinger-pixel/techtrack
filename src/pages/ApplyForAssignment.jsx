@@ -79,6 +79,9 @@ export default function ApplyForAssignment() {
       return;
     }
     setSaving(true);
+    // #region agent log
+    fetch('http://127.0.0.1:7340/ingest/00b824c1-7ecc-4155-9444-25770c8cfb9d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f933e5'},body:JSON.stringify({sessionId:'f933e5',runId:'qa-run',hypothesisId:'H4',location:'src/pages/ApplyForAssignment.jsx:handleSubmit',message:'Public application submit started',data:{assignmentId,hasName:!!form.student_name,hasEmail:!!form.student_email,rolesCount:form.roles_applying_for.length},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     await db.entities.TechApplication.create({
       assignment_id: assignmentId,
       student_name: form.student_name,

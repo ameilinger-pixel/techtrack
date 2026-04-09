@@ -44,8 +44,8 @@ const adminNavGroups = [
 ];
 
 const directorNav = [
-  { label: 'My Dashboard', path: '/director', icon: LayoutDashboard },
-  { label: 'Request Tech Help', path: '/director/request-tech', icon: Wrench },
+  { label: 'My Dashboard', path: '/director/portal', icon: LayoutDashboard },
+  { label: 'Director Tech Request', path: '/director/request-tech', icon: Wrench },
   { label: 'Student Directory', path: '/students', icon: GraduationCap },
   { label: 'Resource Library', path: '/resources', icon: BookOpen },
 ];

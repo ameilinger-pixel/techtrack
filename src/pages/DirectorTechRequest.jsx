@@ -46,6 +46,8 @@ export default function DirectorTechRequest() {
     director_name: user?.full_name || "",
     director_email: user?.email || "",
     troupe: "",
+    theater: "",
+    rehearsal_location: "",
     rehearsal_schedule: "",
     tech_week: { start_date: "", end_date: "", start_time: "", end_time: "" },
     performances: [],
@@ -160,9 +162,8 @@ export default function DirectorTechRequest() {
     const openingNight = showDates.length ? showDates[0] : null;
     const tech_needs_description = summarizeTechRoles(roles_needed, other_role_needed);
 
-    // Format tech week schedule as human-readable: "Monday June 7 – Wednesday June 10 @ 5pm–9pm"
     const fmtDay = (dateStr) => new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-    const techWeekSchedule = `${fmtDay(tech_week.start_date)} – ${fmtDay(tech_week.end_date)} @ ${formatTime12(tech_week.start_time)}–${formatTime12(tech_week.end_time)}`;
+    const techWeekSchedule = `${fmtDay(tech_week.start_date)} - ${fmtDay(tech_week.end_date)} @ ${formatTime12(tech_week.start_time)}-${formatTime12(tech_week.end_time)}`;
     const showDatesFormatted = performances.map(p => {
       const d = new Date(p.date + 'T00:00:00');
       const dayStr = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -171,69 +172,69 @@ export default function DirectorTechRequest() {
 
     setSaving(true);
     try {
-    await db.entities.TechAssignment.create({
-      show_title: formData.show_title,
-      director_name: formData.director_name,
-      director_email: formData.director_email,
-      troupe: formData.troupe,
-      theater: formData.troupe,
-      rehearsal_schedule: formData.rehearsal_schedule,
-      tech_week_schedule: techWeekSchedule,
-      assigned_role: "pending_assignment",
-      required_level: "Level 0",
-      payment_amount: 0,
-      roles_needed: [...roles_needed],
-      other_role_needed: roles_needed.includes("Other") ? String(other_role_needed || "").trim() : "",
-      tech_week_start: tech_week.start_date,
-      tech_week_end: tech_week.end_date,
-      tech_rehearsal_times: techDates.map(date => `${date} ${tech_week.start_time}–${tech_week.end_time}`).join(', '),
-      show_dates: showDatesFormatted,
-      show_call_times: performances.map(p => ({
-        date: p.date,
-        call_time: p.call_time,
-        curtain_time: p.curtain_time,
-      })),
-      first_tech_date: tech_week.start_date,
-      opening_night: openingNight,
-      assignment_status: "pending_admin_approval",
-      status: "pending_admin_approval",
-      notes: formData.notes,
-      can_shadow_tech: formData.shadow_student_ok,
-      shadow_student_ok: formData.shadow_student_ok,
-      resources_needed: [
-        ...(formData.equipment_needed || []),
-        ...(formData.other_equipment ? [formData.other_equipment] : []),
-      ],
-      created_date: new Date().toISOString().split("T")[0],
-      specific_tech_request: formData.specific_tech_request,
-      tech_needs_description,
-      show_files: formData.show_files || [],
-    });
+      await db.entities.TechAssignment.create({
+        show_title: formData.show_title,
+        director_name: formData.director_name,
+        director_email: formData.director_email,
+        troupe: formData.troupe,
+        theater: formData.theater,
+        rehearsal_location: formData.rehearsal_location,
+        rehearsal_schedule: formData.rehearsal_schedule,
+        tech_week_schedule: techWeekSchedule,
+        assigned_role: "pending_assignment",
+        required_level: "Level 0",
+        payment_amount: 0,
+        roles_needed: [...roles_needed],
+        other_role_needed: roles_needed.includes("Other") ? String(other_role_needed || "").trim() : "",
+        tech_week_start: tech_week.start_date,
+        tech_week_end: tech_week.end_date,
+        tech_rehearsal_times: techDates.map(date => `${date} ${tech_week.start_time}-${tech_week.end_time}`).join(', '),
+        show_dates: showDatesFormatted,
+        show_call_times: performances.map(p => ({
+          date: p.date,
+          call_time: p.call_time,
+          curtain_time: p.curtain_time,
+        })),
+        first_tech_date: tech_week.start_date,
+        opening_night: openingNight,
+        assignment_status: "pending_admin_approval",
+        status: "pending_admin_approval",
+        notes: formData.notes,
+        can_shadow_tech: formData.shadow_student_ok,
+        shadow_student_ok: formData.shadow_student_ok,
+        resources_needed: [
+          ...(formData.equipment_needed || []),
+          ...(formData.other_equipment ? [formData.other_equipment] : []),
+        ],
+        created_date: new Date().toISOString().split("T")[0],
+        specific_tech_request: formData.specific_tech_request,
+        tech_needs_description,
+        show_files: formData.show_files || [],
+      });
 
-    // Email notifications (best effort)
-    try {
-      const adminUsers = await db.entities.User.filter({ role: "admin" });
-      const adminEmail = adminUsers?.[0]?.email;
-      if (adminEmail) {
-        await db.integrations.Core.SendEmail({
-          to: adminEmail,
-          subject: `New Tech Request: ${formData.show_title}`,
-          body: `A new tech request has been submitted:<br><br><strong>Show:</strong> ${formData.show_title}<br><strong>Director:</strong> ${formData.director_name}<br><strong>Help needed:</strong> ${tech_needs_description}<br><strong>Specific Request:</strong> ${formData.specific_tech_request || "None"}<br><br>Please review the request in the admin dashboard.`,
-        });
+      try {
+        const adminUsers = await db.entities.User.filter({ role: "admin" });
+        const adminEmail = adminUsers?.[0]?.email;
+        if (adminEmail) {
+          await db.integrations.Core.SendEmail({
+            to: adminEmail,
+            subject: `New Tech Request: ${formData.show_title}`,
+            body: `A new tech request has been submitted:<br><br><strong>Show:</strong> ${formData.show_title}<br><strong>Director:</strong> ${formData.director_name}<br><strong>Help needed:</strong> ${tech_needs_description}<br><strong>Specific Request:</strong> ${formData.specific_tech_request || "None"}<br><br>Please review the request in the admin dashboard.`,
+          });
+        }
+        if (formData.director_email) {
+          await db.integrations.Core.SendEmail({
+            to: formData.director_email,
+            subject: `Tech Request Received: ${formData.show_title}`,
+            body: `Hi ${formData.director_name.split(" ")[0]},<br><br>We've received your tech request for <strong>${formData.show_title}</strong>.<br><br>Our admin team will review and assign technicians. You'll be notified once confirmed.<br><br>Best regards,<br>NTPA TechTrack Team`,
+          });
+        }
+      } catch (emailErr) {
+        console.warn('Email notification failed:', emailErr);
       }
-      if (formData.director_email) {
-        await db.integrations.Core.SendEmail({
-          to: formData.director_email,
-          subject: `Tech Request Received: ${formData.show_title}`,
-          body: `Hi ${formData.director_name.split(" ")[0]},<br><br>We've received your tech request for <strong>${formData.show_title}</strong>.<br><br>Our admin team will review and assign technicians. You'll be notified once confirmed.<br><br>Best regards,<br>NTPA TechTrack Team`,
-        });
-      }
-    } catch (emailErr) {
-      console.warn('Email notification failed:', emailErr);
-    }
 
-    setSaving(false);
-    setIsSubmitted(true);
+      setSaving(false);
+      setIsSubmitted(true);
     } catch (err) {
       setSaving(false);
       toast({ title: "Submission failed. Please try again.", variant: "destructive" });
@@ -243,6 +244,8 @@ export default function DirectorTechRequest() {
 
   const formReady =
     formData.show_title &&
+    formData.theater &&
+    formData.rehearsal_location &&
     formData.tech_week.start_date &&
     formData.tech_week.end_date &&
     formData.tech_week.start_time &&
@@ -283,7 +286,6 @@ export default function DirectorTechRequest() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Show Info */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2"><Briefcase className="w-4 h-4" />Show Information</CardTitle>
@@ -294,6 +296,14 @@ export default function DirectorTechRequest() {
               <Input value={formData.show_title} onChange={e => handleChange("show_title", e.target.value)} required />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Theater / Performance Venue *</Label>
+                <Input value={formData.theater} onChange={e => handleChange("theater", e.target.value)} placeholder="e.g. Rodenbaugh Theatre" required />
+              </div>
+              <div className="space-y-2">
+                <Label>Troupe / Program</Label>
+                <Input value={formData.troupe} onChange={e => handleChange("troupe", e.target.value)} placeholder="e.g. NTPA Repertory" />
+              </div>
               <div className="space-y-2">
                 <Label>Director name *</Label>
                 <Input value={formData.director_name} onChange={e => handleChange("director_name", e.target.value)} required />
@@ -306,20 +316,22 @@ export default function DirectorTechRequest() {
           </CardContent>
         </Card>
 
-        {/* Rehearsal Schedule */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2"><Calendar className="w-4 h-4" />Rehearsal Schedule</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Rehearsal Schedule (days, times, location)</Label>
+              <Label>Rehearsal Location *</Label>
+              <Input value={formData.rehearsal_location} onChange={e => handleChange("rehearsal_location", e.target.value)} placeholder="e.g. Plano East Rehearsal Hall B" required />
+            </div>
+            <div className="space-y-2">
+              <Label>Rehearsal Schedule (days and times)</Label>
               <Input value={formData.rehearsal_schedule} onChange={e => handleChange("rehearsal_schedule", e.target.value)} placeholder="e.g. Mondays 6-9 pm, Plano East PAC" />
             </div>
           </CardContent>
         </Card>
 
-        {/* Tech Week */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2"><Clock className="w-4 h-4" />Tech Week</CardTitle>
@@ -335,7 +347,6 @@ export default function DirectorTechRequest() {
           </CardContent>
         </Card>
 
-        {/* Performances */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2"><Calendar className="w-4 h-4" />Performances</CardTitle>
@@ -352,7 +363,7 @@ export default function DirectorTechRequest() {
               <ul className="space-y-2">
                 {formData.performances.map((p, index) => (
                   <li key={`${p.date}-${index}`} className="flex items-center justify-between gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-sm">
-                    <span><strong>{new Date(p.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</strong> — Call {formatTime12(p.call_time)}, curtain {formatTime12(p.curtain_time)}</span>
+                    <span><strong>{new Date(p.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</strong> - Call {formatTime12(p.call_time)}, curtain {formatTime12(p.curtain_time)}</span>
                     <Button type="button" variant="ghost" size="sm" onClick={() => removePerformance(index)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
                   </li>
                 ))}
@@ -363,13 +374,12 @@ export default function DirectorTechRequest() {
           </CardContent>
         </Card>
 
-        {/* Technical Support */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Technical Support Needed *</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">Select everything you need—you can choose multiple options.</p>
+            <p className="text-sm text-muted-foreground">Select everything you need-you can choose multiple options.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {HELP_ROLE_OPTIONS.map(role => (
                 <label key={role.value} className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm cursor-pointer hover:bg-muted transition-colors">
@@ -389,13 +399,12 @@ export default function DirectorTechRequest() {
               <Input value={formData.specific_tech_request} onChange={e => handleChange("specific_tech_request", e.target.value)} placeholder="e.g., 'I'd like Sarah Johnson if she's available'" />
             </div>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <Checkbox checked={formData.shadow_student_ok} onCheckedChange={v => handleChange("shadow_student_ok", v)} />
+              <Checkbox checked={formData.shadow_student_ok} onCheckedChange={v => handleChange("shadow_student_ok", !!v)} />
               <span>I'm okay with having a shadow student observe</span>
             </label>
           </CardContent>
         </Card>
 
-        {/* Equipment */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Equipment / Things Requested</CardTitle>
@@ -418,7 +427,6 @@ export default function DirectorTechRequest() {
           </CardContent>
         </Card>
 
-        {/* File Attachments */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2"><Paperclip className="w-4 h-4" />Attach Files (optional)</CardTitle>
@@ -459,7 +467,6 @@ export default function DirectorTechRequest() {
           </CardContent>
         </Card>
 
-        {/* Notes */}
         <div className="space-y-2">
           <Label>Additional notes</Label>
           <Textarea value={formData.notes} onChange={e => handleChange("notes", e.target.value)} placeholder="Any special requirements, preferences, or additional details..." className="h-24" />

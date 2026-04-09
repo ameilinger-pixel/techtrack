@@ -21,6 +21,7 @@ function buildVars(assignment) {
     || parseDateSafe(assignment.first_tech_date)
     || parseDateSafe(assignment.opening_night);
   const daysUntil = techStart ? differenceInDays(techStart, new Date()) : '';
+  const techNeedsFormUrl = `${window.location.origin}/director/portal`;
   // Determine tech role from roles_needed or tech_needs_description
   const techRole = Array.isArray(assignment.roles_needed) && assignment.roles_needed.length > 0
     ? assignment.roles_needed[0]
@@ -38,6 +39,7 @@ function buildVars(assignment) {
     days_until_tech: daysUntil,
     theater: assignment.theater || '',
     troupe: assignment.troupe || '',
+    tech_needs_form_url: techNeedsFormUrl,
   };
 }
 
@@ -49,11 +51,17 @@ function resolveRecipient(template, assignment) {
   return { email: assignment.director_email, name: assignment.director_name };
 }
 
+function hasExistingEmail(existingPending, assignmentId, trigger) {
+  return existingPending.some(
+    p => p.assignment_id === assignmentId
+      && p.trigger === trigger
+      && ['pending', 'approved', 'sent'].includes(p.status)
+  );
+}
+
 // Queue a single pending email — deduplicates by assignment_id + trigger + status=pending
 export async function queueEmail(template, assignment, existingPending = []) {
-  const alreadyQueued = existingPending.some(
-    p => p.assignment_id === assignment.id && p.trigger === template.trigger && p.status === 'pending'
-  );
+  const alreadyQueued = hasExistingEmail(existingPending, assignment.id, template.trigger);
   if (alreadyQueued) return null;
 
   const vars = buildVars(assignment);
@@ -63,7 +71,7 @@ export async function queueEmail(template, assignment, existingPending = []) {
   const subject = fillTemplate(template.subject, vars);
   const body = fillTemplate(template.body, vars);
 
-  return db.entities.PendingEmail.create({
+  const queued = await db.entities.PendingEmail.create({
     trigger: template.trigger,
     template_id: template.id,
     template_name: template.name,
@@ -74,7 +82,22 @@ export async function queueEmail(template, assignment, existingPending = []) {
     subject,
     body,
     status: 'pending',
+    delivery_status: 'queued',
+    retry_count: 0,
   });
+  try {
+    await db.activity.log({
+      event_type: 'email_queued',
+      source: 'email_engine',
+      assignment_id: assignment.id,
+      pending_email_id: queued.id,
+      summary: `Queued ${template.trigger} email for ${recipient.email}`,
+      metadata: { trigger: template.trigger, to: recipient.email },
+    });
+  } catch (err) {
+    console.warn('[emailEngine] activity log failed', err);
+  }
+  return queued;
 }
 
 // Run the full engine scan — call this from a button or on dashboard load
@@ -96,18 +119,14 @@ export async function runEmailEngine(assignments, templates, existingPending) {
 
       if (template.trigger === 'technician_assigned' && assignment.status === 'assigned' && assignment.assigned_student_email) {
         // Only trigger once — check if we already sent or queued for this assignment
-        const alreadySent = existingPending.some(
-          p => p.assignment_id === assignment.id && p.trigger === 'technician_assigned' && ['pending','approved','sent'].includes(p.status)
-        );
+        const alreadySent = hasExistingEmail(existingPending, assignment.id, 'technician_assigned');
         shouldTrigger = !alreadySent;
       }
 
       if (template.trigger === 'application_posted') {
         // Fire once when posting_created_date is set (application has gone live)
         if (assignment.posting_created_date) {
-          const alreadySent = existingPending.some(
-            p => p.assignment_id === assignment.id && p.trigger === 'application_posted' && ['pending','approved','sent'].includes(p.status)
-          );
+          const alreadySent = hasExistingEmail(existingPending, assignment.id, 'application_posted');
           shouldTrigger = !alreadySent;
         }
       }
@@ -115,22 +134,20 @@ export async function runEmailEngine(assignments, templates, existingPending) {
       if (template.trigger === 'tech_week_reminder' && daysUntil !== null && daysUntil <= 7 && daysUntil > 0) {
         // Remind assigned student one week before tech week
         if (['assigned', 'confirmed'].includes(assignment.status) && assignment.assigned_student_email) {
-          const alreadySent = existingPending.some(
-            p => p.assignment_id === assignment.id && p.trigger === 'tech_week_reminder' && ['pending','approved','sent'].includes(p.status)
-          );
+          const alreadySent = hasExistingEmail(existingPending, assignment.id, 'tech_week_reminder');
           shouldTrigger = !alreadySent;
         }
       }
 
       if (template.trigger === 'no_tech_90_days' && daysUntil !== null && daysUntil <= 90 && daysUntil > 60) {
         if (['requested', 'pending_admin_approval'].includes(assignment.status)) {
-          shouldTrigger = true;
+          shouldTrigger = !hasExistingEmail(existingPending, assignment.id, 'no_tech_90_days');
         }
       }
 
       if (template.trigger === 'no_tech_30_days' && daysUntil !== null && daysUntil <= 30 && daysUntil > 0) {
         if (['requested', 'pending_admin_approval'].includes(assignment.status)) {
-          shouldTrigger = true;
+          shouldTrigger = !hasExistingEmail(existingPending, assignment.id, 'no_tech_30_days');
         }
       }
 
@@ -140,7 +157,7 @@ export async function runEmailEngine(assignments, templates, existingPending) {
           daysUntil !== null && daysUntil < 0 &&
           !assignment.crew_assignment_form_submitted
         ) {
-          shouldTrigger = true;
+          shouldTrigger = !hasExistingEmail(existingPending, assignment.id, 'crew_form_overdue');
         }
       }
 

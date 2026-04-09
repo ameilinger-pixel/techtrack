@@ -1,601 +1,274 @@
+import React, { useState } from 'react';
+
 import { db } from '@/lib/backend/client';
-
-import React, { useState, useEffect } from 'react';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle
-} from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import PageHeader from '@/components/shared/PageHeader';
+import StatsCard from '@/components/shared/StatsCard';
+import ShowCard from '@/components/admin/ShowCard';
+import AddShowModal from '@/components/admin/AddShowModal';
+import ShowDetailModal from '@/components/admin/ShowDetailModal';
+import ActionCenter from '@/components/admin/ActionCenter';
+import EmptyState from '@/components/shared/EmptyState';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import StatusBadge from '@/components/shared/StatusBadge';
-import EmailPreviewModal from '@/components/shared/EmailPreviewModal';
-import ConfirmDialog from '@/components/shared/ConfirmDialog';
-
-import { useToast } from '@/components/ui/use-toast';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import {
-  parseTechnicians, formatDateDisplay, directorNtpaOrgEmail,
-  mergeFormDataForSave, saveShowWithRetry
-} from '@/lib/showUtils';
-import {
-  Save, Trash2, Archive, RotateCcw, Upload, Plus, X,
-  Loader2, Link as LinkIcon, Mail, Copy, ExternalLink
+  Plus, Search, AlertTriangle, Users, Clock, CheckCircle, Clapperboard, Filter, X, ChevronRight, Inbox
 } from 'lucide-react';
+import { differenceInDays } from 'date-fns';
+import { parseDateSafe } from '@/lib/showUtils';
+import { showNeedsAction, getUrgencyBucket, crewCount } from '@/lib/showUtils';
 
-export default function ShowDetailModal({ show, open, onClose, onUpdated }) {
-  const [form, setForm] = useState({});
-  const [saving, setSaving] = useState(false);
-  const [emailModal, setEmailModal] = useState(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [showPostingDialog, setShowPostingDialog] = useState(false);
-  const [postingUrl, setPostingUrl] = useState('');
-  const { toast } = useToast();
+export default function AdminHub() {
+  const [search, setSearch] = useState('');
+  const [selectedShow, setSelectedShow] = useState(null);
+  const [addModal, setAddModal] = useState(false);
+  const [quickFilter, setQuickFilter] = useState(null);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (show) {
-      setForm({
-        ...show,
-        assigned_technicians: parseTechnicians(show),
-      });
-    }
-  }, [show]);
+  const { data: shows = [], isLoading } = useQuery({
+    queryKey: ['hub-shows'],
+    queryFn: () => db.entities.Show.list('-updated_date', 500),
+  });
+  const { data: assignments = [], isLoading: la } = useQuery({
+    queryKey: ['hub-assignments'],
+    queryFn: () => db.entities.TechAssignment.list('-updated_date', 500),
+  });
+  const { data: trainings = [] } = useQuery({
+    queryKey: ['hub-trainings'],
+    queryFn: () => db.entities.Training.list(),
+  });
+  const { data: enrollments = [] } = useQuery({
+    queryKey: ['hub-enrollments'],
+    queryFn: () => db.entities.BadgeEnrollment.list(),
+  });
 
-  if (!show) return null;
+  const pendingTrainingProposals = trainings.filter(t => t.status === 'proposed').length;
+  const pendingBadgeReviews = enrollments.filter(e => e.status === 'pending_review').length;
 
-  const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
-  const portalUrl = `${window.location.origin}/director/show-portal?id=${show.id}`;
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await saveShowWithRetry(db.entities.Show, show.id, form);
-      toast({ title: 'Show saved' });
-      onUpdated?.();
-      onClose();
-    } catch (err) {
-      console.error('[handleSave]', err);
-      toast({ title: 'Failed to save', description: err?.message || 'Unknown error', variant: 'destructive' });
-    } finally {
-      setSaving(false);
-    }
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['hub-shows'] });
+    queryClient.invalidateQueries({ queryKey: ['hub-assignments'] });
   };
 
-  const handleDelete = async () => {
-    try {
-      await db.entities.Show.delete(show.id);
-      toast({ title: 'Show deleted' });
-      onUpdated?.();
-      onClose();
-    } catch (err) {
-      console.error('[handleDelete]', err);
-      toast({ title: 'Failed to delete', description: err?.message || 'Unknown error', variant: 'destructive' });
-    }
+  const filteredShows = shows.filter(s => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || (
+      s.title?.toLowerCase().includes(q) ||
+      s.director_name?.toLowerCase().includes(q) ||
+      s.theater?.toLowerCase().includes(q)
+    );
+    if (!matchSearch) return false;
+
+    if (quickFilter === 'needs_action') return showNeedsAction(s);
+    if (quickFilter === 'declined') return s.tech_support_declined;
+    if (quickFilter === 'application_live') return s.workflow_status === 'posting_open' || s.workflow_status === 'posting_created';
+    return true;
+  });
+
+  // Stats
+  const needsAction = shows.filter(s => showNeedsAction(s)).length;
+  const assigned = shows.filter(s => crewCount(s) > 0).length;
+  const inProgress = shows.filter(s => s.status === 'in_progress').length;
+  const onTrack = shows.filter(s => s.status === 'upcoming' && !showNeedsAction(s) && !s.tech_support_declined).length;
+
+  // Inbox: upcoming shows that need action, sorted by urgency
+  const inboxShows = shows
+    .filter(s => s.status === 'upcoming' && !s.tech_support_declined && showNeedsAction(s))
+    .sort((a, b) => {
+      const da = parseDateSafe(a.tech_week_start);
+      const db = parseDateSafe(b.tech_week_start);
+      return (da?.getTime() || 0) - (db?.getTime() || 0);
+    })
+    .slice(0, 8);
+
+  const ACTION_LABEL = {
+    contact_director: 'Contact director',
+    post_application: 'Post application',
+    notify_director: 'Notify director — tech week in ≤30d',
+    print_crew_form: 'Print crew form (tech week soon)',
+    return_equipment: 'Equipment needs to be returned',
   };
 
-  const handleArchive = async () => {
-    try {
-      await db.entities.Show.update(show.id, { status: 'archived' });
-      toast({ title: 'Show archived' });
-      onUpdated?.();
-      onClose();
-    } catch (err) {
-      console.error('[handleArchive]', err);
-      toast({ title: 'Failed to archive', description: err?.message || 'Unknown error', variant: 'destructive' });
-    }
+  // Tab filters
+  const upcoming = filteredShows.filter(s => s.status === 'upcoming');
+  const kanbanBuckets = {
+    '90_days': upcoming.filter(s => getUrgencyBucket(s) === '90_days'),
+    '60_days': upcoming.filter(s => getUrgencyBucket(s) === '60_days'),
+    '30_days': upcoming.filter(s => getUrgencyBucket(s) === '30_days'),
+    'this_week': upcoming.filter(s => getUrgencyBucket(s) === 'this_week'),
   };
 
-  const handleRestore = async () => {
-    try {
-      await db.entities.Show.update(show.id, { status: 'upcoming' });
-      toast({ title: 'Show restored' });
-      onUpdated?.();
-    } catch (err) {
-      console.error('[handleRestore]', err);
-      toast({ title: 'Failed to restore', description: err?.message || 'Unknown error', variant: 'destructive' });
-    }
-  };
-
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    try {
-      const { file_url } = await db.integrations.Core.UploadFile({ file });
-      const newFiles = [...(form.show_files || []), { name: file.name, url: file_url, category: 'general' }];
-      update('show_files', newFiles);
-    } catch (err) {
-      console.error('[handleFileUpload]', err);
-      toast({ title: 'Upload failed', description: err?.message || 'Unknown error', variant: 'destructive' });
-    }
-  };
-
-  const removeFile = (idx) => {
-    const newFiles = [...(form.show_files || [])];
-    newFiles.splice(idx, 1);
-    update('show_files', newFiles);
-  };
-
-  // Crew management
-  const addCrewRow = () => {
-    update('assigned_technicians', [
-      ...(form.assigned_technicians || []),
-      { name: '', email: '', role: '', payment_amount: 0, payment_status: 'pending' }
-    ]);
-  };
-
-  const updateCrew = (idx, field, value) => {
-    const crew = [...(form.assigned_technicians || [])];
-    crew[idx] = { ...crew[idx], [field]: value };
-    update('assigned_technicians', crew);
-  };
-
-  const removeCrew = (idx) => {
-    const crew = [...(form.assigned_technicians || [])];
-    crew.splice(idx, 1);
-    update('assigned_technicians', crew);
-  };
-
-  // Workflow — cascade: marking a step fills all prior step dates too
-  const today = new Date().toISOString().split('T')[0];
-
-  const WORKFLOW_STEPS = [
-    { status: 'awaiting_form',        dateField: 'director_contacted_date' },
-    { status: 'needs_director_notify',dateField: 'student_outreach_date' },
-    { status: 'posting_open',         dateField: 'posting_created_date' },
-    { status: 'technician_assigned',  dateField: null },
-  ];
-
-  const advanceWorkflow = (newStatus, datefield) => {
-    const targetIdx = WORKFLOW_STEPS.findIndex(s => s.status === newStatus);
-    const updates = { workflow_status: newStatus };
-    if (datefield) updates[datefield] = updates[datefield] || today;
-    // Fill all preceding steps if not already set
-    WORKFLOW_STEPS.slice(0, targetIdx).forEach(step => {
-      if (step.dateField && !form[step.dateField]) updates[step.dateField] = today;
-    });
-    setForm(prev => ({ ...prev, ...updates }));
-  };
-
-  const DEFAULT_FROM = 'amelinger@ntpa.org';
-
-  const sendDirectorContactEmail = () => {
-    const directorFirst = (form.director_name || '').split(' ')[0] || 'Director';
-    const techStart = form.tech_week_start ? formatDateDisplay(form.tech_week_start) : null;
-    const techEnd = form.tech_week_end ? formatDateDisplay(form.tech_week_end) : null;
-    const dateRange = techStart && techEnd ? `${techStart} – ${techEnd}` : techStart || '(dates TBD)';
-    const theater = form.theater ? ` at ${form.theater}` : '';
-    const portalLink = `${window.location.origin}/director/show-portal?id=${show.id}`;
-
-    setEmailModal({
-      from: DEFAULT_FROM,
-      to: form.director_email || '',
-      subject: `Tech support check-in — ${form.title}`,
-      body: `Hi ${directorFirst},<br><br>Hope your rehearsals for <strong>${form.title}</strong> are going well! I'm reaching out for our standard 90-day check-in to get the ball rolling on tech support${theater}.<br><br>Tech week is currently scheduled for <strong>${dateRange}</strong>. As we get closer, I want to make sure we have everything lined up for you.<br><br>Could you take a few minutes to let me know:<br><ul><li>What technical support you're expecting to need (lighting, sound, projection, rigging, etc.)</li><li>Any changes to your tech week or performance schedule</li><li>Whether anything has changed since your original request</li></ul><br>You can also view your show details and upload any relevant files (light plots, cue sheets, etc.) through your director portal:<br><a href="${portalLink}">${portalLink}</a><br><br>Let me know if you have any questions — happy to help!<br><br>Best,<br>TechTrack / NTPA`,
-    });
-    advanceWorkflow('awaiting_form', 'director_contacted_date');
-  };
-
-  const sendNotifyDirectorEmail = () => {
-    const directorFirst = (form.director_name || '').split(' ')[0] || 'Director';
-    const techStart = form.tech_week_start ? formatDateDisplay(form.tech_week_start) : null;
-    const techEnd = form.tech_week_end ? formatDateDisplay(form.tech_week_end) : null;
-    const dateRange = techStart && techEnd ? `${techStart} – ${techEnd}` : techStart || '(dates TBD)';
-    const appLink = form.application_link_url || null;
-
-    setEmailModal({
-      from: DEFAULT_FROM,
-      to: form.director_email || '',
-      subject: `Tech assignment update — ${form.title}`,
-      body: `Hi ${directorFirst},<br><br>I wanted to give you a quick update on the tech support situation for <strong>${form.title}</strong> (tech week: <strong>${dateRange}</strong>).<br><br>We have an open application posted for a technician and are actively working to find the right match for your show. ${appLink ? `Students can apply here: <a href="${appLink}">${appLink}</a><br><br>` : ''}As soon as someone is confirmed, I'll reach out right away to introduce you and get the conversation started.<br><br>In the meantime, if anything has changed about your schedule or technical needs, please let me know so I can update the posting.<br><br>Thanks for your patience — we're on it!<br><br>Best,<br>TechTrack / NTPA`,
-    });
-    advanceWorkflow('needs_director_notify', 'director_notified_date');
-  };
-
-  const sendIntroEmail = () => {
-    const crew = form.assigned_technicians || [];
-    const primaryTech = crew[0];
-    if (!primaryTech) return;
-    const ntpaEmail = directorNtpaOrgEmail(form.director_name);
-    const directorTo = ntpaEmail || (form.director_email || '').trim();
-    const toEmails = [directorTo, primaryTech.email].filter(Boolean).join(', ');
-    const directorFirst = (form.director_name || '').split(' ')[0];
-    const technicianFull = primaryTech.name || '';
-    const technicianFirst = technicianFull.split(' ')[0];
-    const role = primaryTech.role || 'technician';
-    const crewExtra = crew.length > 1
-      ? `<br><br><em>Note: ${crew.length} technicians are listed on this show; this message introduces the primary contact (${technicianFull}).</em>`
-      : '';
-    setEmailModal({
-      from: DEFAULT_FROM,
-      to: toEmails,
-      subject: `[${form.title}] tech assignment`,
-      body: `Hi ${directorFirst},<br><br>I am connecting you with technician ${technicianFull}, who has offered to take the position of ${role} for ${form.title}.${crewExtra}<br><br>Remember to set a date with each other to watch a run and discuss your needs and any conflicts. I will then give ${directorFirst} our new Crew Assignment sheet for ${technicianFirst} to obtain signatures on each day they are there.<br><br>Let me know if y'all need anything :)`,
-    });
-    setForm(prev => ({ ...prev, assignment_email_sent: true, workflow_status: 'technician_assigned' }));
+  const tabShows = {
+    upcoming: upcoming,
+    assigned: filteredShows.filter(s => crewCount(s) > 0),
+    in_progress: filteredShows.filter(s => s.status === 'in_progress'),
+    future: filteredShows.filter(s => getUrgencyBucket(s) === 'future'),
+    archived: filteredShows.filter(s => s.status === 'archived'),
+    completed: filteredShows.filter(s => s.status === 'completed'),
   };
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={onClose}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <div className="flex items-center gap-3">
-              <DialogTitle className="text-xl">{show.title}</DialogTitle>
-              <StatusBadge status={form.workflow_status || form.status} />
-            </div>
-          </DialogHeader>
+    <div>
+      <PageHeader title="Admin Hub" subtitle="Manage all shows and their workflows">
+        <Button onClick={() => setAddModal(true)}><Plus className="w-4 h-4 mr-2" />Add Show</Button>
+      </PageHeader>
 
-          {/* Quick Actions bar */}
-          {(() => {
-            const ws = form.workflow_status;
-            const hasCrew = (form.assigned_technicians || []).length > 0;
-            const actions = [];
-            if (!form.director_contacted_date)
-              actions.push({ label: '📧 Email Director', fn: sendDirectorContactEmail });
-            if (form.director_contacted_date && !form.posting_created_date)
-              actions.push({ label: '📋 Create Application Posting', fn: () => setShowPostingDialog(true) });
-            if (form.posting_created_date && !form.director_notified_date)
-              actions.push({ label: '📣 Notify Director', fn: sendNotifyDirectorEmail });
-            if (hasCrew && !form.assignment_email_sent)
-              actions.push({ label: '🤝 Send Intro Email', fn: sendIntroEmail });
-            if (actions.length === 0 && hasCrew)
-              actions.push({ label: '✅ All steps done', fn: null });
-            return actions.length > 0 ? (
-              <div className="flex flex-wrap gap-2 py-2 px-1 mb-1 bg-accent/40 rounded-lg">
-                <span className="text-xs font-semibold text-muted-foreground self-center mr-1">Next:</span>
-                {actions.map((a, i) => a.fn ? (
-                  <Button key={i} size="sm" variant="secondary" className="text-xs h-7" onClick={a.fn}>{a.label}</Button>
-                ) : (
-                  <span key={i} className="text-xs text-emerald-600 font-medium self-center">{a.label}</span>
-                ))}
-              </div>
-            ) : null;
-          })()}
-
-          {/* Application Posting Dialog */}
-          {showPostingDialog && (
-            <div className="mb-3 p-4 rounded-lg border border-blue-200 bg-blue-50 space-y-3">
-              <p className="text-sm font-semibold text-blue-900">Create Application Posting</p>
-              <div>
-                <Label className="text-xs text-blue-800">Application Link URL (optional)</Label>
-                <Input
-                  value={postingUrl}
-                  onChange={e => setPostingUrl(e.target.value)}
-                  placeholder="https://forms.gle/..."
-                  className="mt-1 text-sm"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    const today = new Date().toISOString().split('T')[0];
-                    setForm(prev => ({
-                      ...prev,
-                      posting_created_date: today,
-                      workflow_status: 'posting_open',
-                      ...(postingUrl ? { application_link_url: postingUrl } : {}),
-                    }));
-                    setShowPostingDialog(false);
-                    toast({ title: 'Application posting recorded — save to confirm.' });
-                  }}
-                >
-                  ✓ Mark as Posted
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setShowPostingDialog(false)}>Cancel</Button>
-              </div>
-            </div>
+      {/* Action Center */}
+      <Card className="mb-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-500" />Action Center
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading || la ? (
+            <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          ) : (
+            <ActionCenter
+              assignments={assignments}
+              shows={shows}
+              pendingTrainingProposals={pendingTrainingProposals}
+              pendingBadgeReviews={pendingBadgeReviews}
+            />
           )}
+        </CardContent>
+      </Card>
 
-          <Tabs defaultValue="details" className="mt-2">
-            <TabsList className="w-full grid grid-cols-6">
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="files">Files</TabsTrigger>
-              <TabsTrigger value="equipment">Equipment</TabsTrigger>
-              <TabsTrigger value="workflow">Workflow</TabsTrigger>
-              <TabsTrigger value="assignment">Assignment</TabsTrigger>
-              <TabsTrigger value="checklist">Checklist</TabsTrigger>
-            </TabsList>
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <StatsCard title="Needs Action" value={needsAction} icon={AlertTriangle} color="red" onClick={() => setQuickFilter(quickFilter === 'needs_action' ? null : 'needs_action')} />
+        <StatsCard title="Assigned" value={assigned} icon={Users} color="purple" />
+        <StatsCard title="In Progress" value={inProgress} icon={Clock} color="amber" />
+        <StatsCard title="On Track" value={onTrack} icon={CheckCircle} color="green" />
+      </div>
 
-            {/* Details Tab */}
-            <TabsContent value="details" className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div><Label>Status</Label><Select value={form.status} onValueChange={v => update('status', v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {['upcoming','in_progress','completed','archived'].map(s => <SelectItem key={s} value={s}>{s.replace(/_/g,' ')}</SelectItem>)}
-                  </SelectContent>
-                </Select></div>
-                <div><Label>Theater</Label><Input value={form.theater||''} onChange={e => update('theater', e.target.value)} /></div>
-                <div><Label>Director</Label><Input value={form.director_name||''} onChange={e => update('director_name', e.target.value)} /></div>
-                <div><Label>Director Email</Label><Input value={form.director_email||''} onChange={e => update('director_email', e.target.value)} /></div>
-                <div><Label>Tech Week Start</Label><Input type="date" value={form.tech_week_start||''} onChange={e => update('tech_week_start', e.target.value)} /></div>
-                <div><Label>Tech Week End</Label><Input type="date" value={form.tech_week_end||''} onChange={e => update('tech_week_end', e.target.value)} /></div>
-              </div>
-              <div>
-                <Label>Director Portal URL</Label>
-                <div className="flex gap-2 mt-1">
-                  <Input value={portalUrl} readOnly className="text-xs" />
-                  <Button variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(portalUrl); toast({ title: 'Copied' }); }}>
-                    <Copy className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-              {(() => {
-                const applyUrl = form.application_link_url || `${window.location.origin}/apply?show=${show.id}`;
-                return (
-                  <div>
-                    <Label>Application Link</Label>
-                    <div className="flex gap-2 mt-1">
-                      <Input value={applyUrl} readOnly className="text-xs" />
-                      <Button variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(applyUrl); toast({ title: 'Application link copied!' }); }}>
-                        <Copy className="w-4 h-4" />
-                      </Button>
-                      <Button variant="outline" size="icon" asChild>
-                        <a href={applyUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-4 h-4" /></a>
-                      </Button>
-                    </div>
-                    {form.posting_created_date && (
-                      <p className="text-xs text-muted-foreground mt-1">Posted {formatDateDisplay(form.posting_created_date)}</p>
-                    )}
+      {/* Search + Filters */}
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input placeholder="Search shows..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+        </div>
+        <div className="flex gap-2">
+          {[
+            { key: 'needs_action', label: 'Needs Action', color: 'text-red-600' },
+            { key: 'declined', label: 'Declined' },
+            { key: 'application_live', label: 'Application Live' },
+          ].map(f => (
+            <Button
+              key={f.key}
+              variant={quickFilter === f.key ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setQuickFilter(quickFilter === f.key ? null : f.key)}
+            >
+              <Filter className="w-3 h-3 mr-1" />{f.label}
+            </Button>
+          ))}
+          {quickFilter && (
+            <Button variant="ghost" size="sm" onClick={() => setQuickFilter(null)}><X className="w-3 h-3 mr-1" />Clear</Button>
+          )}
+        </div>
+      </div>
+
+      {/* Inbox: urgent action items */}
+      {!quickFilter && inboxShows.length > 0 && (
+        <div className="mb-6 border border-amber-200 bg-amber-50 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Inbox className="w-4 h-4 text-amber-600" />
+            <span className="font-semibold text-sm text-amber-800">Action Required ({inboxShows.length})</span>
+          </div>
+          <div className="space-y-2">
+            {inboxShows.map(s => {
+              const action = showNeedsAction(s);
+              const techStart = parseDateSafe(s.tech_week_start);
+              const days = techStart ? differenceInDays(techStart, new Date()) : null;
+              return (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between bg-white rounded-lg px-3 py-2 cursor-pointer hover:bg-amber-50 border border-amber-100 transition-colors"
+                  onClick={() => setSelectedShow(s)}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                    <span className="text-sm font-medium text-foreground truncate">{s.title}</span>
+                    <span className="text-xs text-muted-foreground hidden sm:inline truncate">{s.director_name}</span>
                   </div>
-                );
-              })()}
-              <div><Label>Notes</Label><Textarea value={form.notes||''} onChange={e => update('notes', e.target.value)} rows={3} /></div>
-            </TabsContent>
+                  <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+                    <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                      {ACTION_LABEL[action] || action}
+                    </span>
+                    {days !== null && (
+                      <span className={`text-xs font-semibold ${days <= 14 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                        {days < 0 ? `${Math.abs(days)}d past` : `${days}d`}
+                      </span>
+                    )}
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-            {/* Files Tab */}
-            <TabsContent value="files" className="space-y-4 mt-4">
-              <div className="flex items-center gap-2">
-                <label className="cursor-pointer">
-                  <input type="file" className="hidden" onChange={handleFileUpload} />
-                  <Button variant="outline" size="sm" asChild><span><Upload className="w-4 h-4 mr-1" />Upload File</span></Button>
-                </label>
-              </div>
-              <div>
-                <Label>Application Link URL</Label>
-                <Input value={form.application_link_url||''} onChange={e => update('application_link_url', e.target.value)} placeholder="https://..." />
+      {/* Kanban for upcoming shows */}
+      {!quickFilter && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {[
+            { key: 'this_week', label: 'This Week', color: 'border-red-300 bg-red-50' },
+            { key: '30_days', label: '≤ 30 Days', color: 'border-amber-300 bg-amber-50' },
+            { key: '60_days', label: '≤ 60 Days', color: 'border-blue-300 bg-blue-50' },
+            { key: '90_days', label: '≤ 90 Days', color: 'border-gray-300 bg-gray-50' },
+          ].map(bucket => (
+            <div key={bucket.key} className={`rounded-xl border-2 ${bucket.color} p-3`}>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold uppercase tracking-wide">{bucket.label}</span>
+                <Badge variant="secondary" className="text-xs">{kanbanBuckets[bucket.key]?.length || 0}</Badge>
               </div>
               <div className="space-y-2">
-                {(form.show_files || []).map((f, i) => (
-                  <div key={i} className="flex items-center justify-between p-2 bg-muted rounded-lg">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <LinkIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                      <a href={f.url} target="_blank" rel="noopener" className="text-sm text-primary truncate hover:underline">{f.name}</a>
-                      <Select value={f.category||'general'} onValueChange={v => {
-                        const files = [...(form.show_files || [])];
-                        files[i] = { ...files[i], category: v };
-                        update('show_files', files);
-                      }}>
-                        <SelectTrigger className="w-28 h-7 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {['general','application','application_link','contract','schedule','tech_rider'].map(c =>
-                            <SelectItem key={c} value={c}>{c.replace(/_/g,' ')}</SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeFile(i)}><X className="w-3 h-3" /></Button>
-                  </div>
+                {(kanbanBuckets[bucket.key] || []).slice(0, 5).map(s => (
+                  <ShowCard key={s.id} show={s} onClick={setSelectedShow} />
                 ))}
-                {(!form.show_files || form.show_files.length === 0) && (
-                  <p className="text-sm text-muted-foreground text-center py-4">No files uploaded</p>
+                {(kanbanBuckets[bucket.key]?.length || 0) === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-3">None</p>
                 )}
               </div>
-            </TabsContent>
-
-            {/* Equipment Tab */}
-            <TabsContent value="equipment" className="space-y-4 mt-4">
-              <div className="flex flex-wrap gap-4">
-                {[{ k: 'needs_lighting', l: 'Lighting' },{ k: 'needs_sound', l: 'Sound' },{ k: 'needs_projection', l: 'Projection' },{ k: 'needs_rigging', l: 'Rigging' }].map(eq => (
-                  <label key={eq.k} className="flex items-center gap-2 text-sm">
-                    <Checkbox checked={form[eq.k]||false} onCheckedChange={v => update(eq.k, v)} />{eq.l}
-                  </label>
-                ))}
-              </div>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox checked={form.equipment_reserved||false} onCheckedChange={v => update('equipment_reserved', v)} />Equipment Reserved
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox checked={form.equipment_returned||false} onCheckedChange={v => update('equipment_returned', v)} />Equipment Returned
-                </label>
-              </div>
-              <div><Label>Equipment Notes</Label><Textarea value={form.equipment_needs||''} onChange={e => update('equipment_needs', e.target.value)} rows={3} /></div>
-            </TabsContent>
-
-            {/* Workflow Tab */}
-            <TabsContent value="workflow" className="space-y-4 mt-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
-                  <div><p className="text-sm font-medium">1. Contact Director</p><p className="text-xs text-muted-foreground">Contacted: {formatDateDisplay(form.director_contacted_date)}</p></div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={sendDirectorContactEmail}>
-                      <Mail className="w-4 h-4 mr-1" />Email & Mark
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => advanceWorkflow('awaiting_form', 'director_contacted_date')}>
-                      Log Only
-                    </Button>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
-                  <div><p className="text-sm font-medium">2. Student Outreach</p><p className="text-xs text-muted-foreground">Outreach: {formatDateDisplay(form.student_outreach_date)}</p></div>
-                  <Button size="sm" variant="outline" onClick={() => advanceWorkflow('needs_director_notify', 'student_outreach_date')}>
-                    Mark Outreach Done
-                  </Button>
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
-                  <div><p className="text-sm font-medium">3. Application Posted</p><p className="text-xs text-muted-foreground">Posted: {formatDateDisplay(form.posting_created_date)}</p></div>
-                  <Button size="sm" variant="outline" onClick={() => advanceWorkflow('posting_open', 'posting_created_date')}>
-                    Mark Posted
-                  </Button>
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
-                  <div><p className="text-sm font-medium">4. Notify Director</p><p className="text-xs text-muted-foreground">Notified: {formatDateDisplay(form.director_notified_date)}</p></div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={sendNotifyDirectorEmail}>
-                      <Mail className="w-4 h-4 mr-1" />Email & Mark
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => advanceWorkflow('needs_director_notify', 'director_notified_date')}>
-                      Log Only
-                    </Button>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
-                  <div><p className="text-sm font-medium">5. Assignment Intro Email</p></div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={sendIntroEmail} disabled={!form.assigned_technicians?.length}>
-                      <Mail className="w-4 h-4 mr-1" />Send Intro
-                    </Button>
-                    <Button size="sm" variant="ghost" disabled={!form.assigned_technicians?.length} onClick={() => {
-                      setForm(prev => ({ ...prev, assignment_email_sent: true, workflow_status: 'technician_assigned' }));
-                    }}>
-                      Log Only
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox checked={form.tech_support_declined||false} onCheckedChange={v => update('tech_support_declined', v)} />
-                <Label>Tech Support Declined</Label>
-              </div>
-            </TabsContent>
-
-            {/* Assignment Tab */}
-            <TabsContent value="assignment" className="space-y-4 mt-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-sm">Crew</h3>
-                <Button size="sm" variant="outline" onClick={addCrewRow}><Plus className="w-4 h-4 mr-1" />Add</Button>
-              </div>
-              {(form.assigned_technicians || []).map((tech, i) => (
-                <div key={i} className="grid grid-cols-5 gap-2 items-end p-3 bg-muted rounded-lg">
-                  <div><Label className="text-xs">Name</Label><Input value={tech.name||''} onChange={e => updateCrew(i, 'name', e.target.value)} className="h-8 text-sm" /></div>
-                  <div><Label className="text-xs">Email</Label><Input value={tech.email||''} onChange={e => updateCrew(i, 'email', e.target.value)} className="h-8 text-sm" /></div>
-                  <div><Label className="text-xs">Role</Label><Input value={tech.role||''} onChange={e => updateCrew(i, 'role', e.target.value)} className="h-8 text-sm" /></div>
-                  <div><Label className="text-xs">Payment</Label><Input type="number" value={tech.payment_amount||''} onChange={e => updateCrew(i, 'payment_amount', parseFloat(e.target.value)||0)} className="h-8 text-sm" /></div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeCrew(i)}><X className="w-4 h-4" /></Button>
-                </div>
-              ))}
-              {(!form.assigned_technicians || form.assigned_technicians.length === 0) && (
-                <p className="text-sm text-muted-foreground text-center py-4">No crew assigned yet</p>
-              )}
-            </TabsContent>
-
-            {/* Checklist Tab */}
-            <TabsContent value="checklist" className="space-y-3 mt-4">
-              {(() => {
-                const today = new Date().toISOString().split('T')[0];
-
-                // Each step: what fields to set when checked (cascade all prior steps too)
-                const cascade = (stepIndex) => {
-                  const updates = {};
-                  if (stepIndex >= 0) updates.director_contacted_date = form.director_contacted_date || today;
-                  if (stepIndex >= 1) updates.director_notified_date = form.director_notified_date || today;
-                  if (stepIndex >= 2) updates.posting_created_date = form.posting_created_date || today;
-                  if (stepIndex >= 4) updates.assignment_email_sent = true;
-                  if (stepIndex >= 5) updates.crew_sheet_sent = true;
-                  if (stepIndex >= 6) updates.crew_sheet_returned = true;
-                  if (stepIndex >= 7) updates.technician_paid = true;
-                  setForm(prev => ({ ...prev, ...updates }));
-                };
-
-                const uncascade = (stepIndex) => {
-                  const updates = {};
-                  if (stepIndex <= 0) updates.director_contacted_date = null;
-                  if (stepIndex <= 1) updates.director_notified_date = null;
-                  if (stepIndex <= 2) updates.posting_created_date = null;
-                  if (stepIndex <= 4) updates.assignment_email_sent = false;
-                  if (stepIndex <= 5) updates.crew_sheet_sent = false;
-                  if (stepIndex <= 6) updates.crew_sheet_returned = false;
-                  if (stepIndex <= 7) updates.technician_paid = false;
-                  setForm(prev => ({ ...prev, ...updates }));
-                };
-
-                return (
-                  <>
-                    <ToggleCheckItem label="Director contacted" checked={!!form.director_contacted_date}
-                      onChange={v => v ? cascade(0) : uncascade(0)} />
-                    <ToggleCheckItem label="Director notified" checked={!!form.director_notified_date}
-                      onChange={v => v ? cascade(1) : uncascade(1)} />
-                    <ToggleCheckItem label="Application posted" checked={!!form.posting_created_date}
-                      onChange={v => v ? cascade(2) : uncascade(2)} />
-                    <CheckItem label="Crew assigned" checked={(form.assigned_technicians||[]).length > 0} />
-                    <CheckItem label="Equipment reserved" checked={!!form.equipment_reserved} />
-                    <ToggleCheckItem label="Assignment email sent" checked={!!form.assignment_email_sent}
-                      onChange={v => v ? cascade(4) : uncascade(4)} />
-                    <ToggleCheckItem label="Crew sheet sent" checked={!!form.crew_sheet_sent}
-                      onChange={v => v ? cascade(5) : uncascade(5)} />
-                    <ToggleCheckItem label="Crew sheet returned" checked={!!form.crew_sheet_returned}
-                      onChange={v => v ? cascade(6) : uncascade(6)} />
-                    <ToggleCheckItem label="Technician paid" checked={!!form.technician_paid}
-                      onChange={v => v ? cascade(7) : uncascade(7)} />
-                  </>
-                );
-              })()}
-            </TabsContent>
-          </Tabs>
-
-          {/* Footer */}
-          <div className="flex items-center justify-between pt-4 border-t">
-            <div className="flex gap-2">
-              {show.status === 'archived' ? (
-                <Button variant="outline" size="sm" onClick={handleRestore}><RotateCcw className="w-4 h-4 mr-1" />Restore</Button>
-              ) : (
-                <Button variant="outline" size="sm" onClick={handleArchive}><Archive className="w-4 h-4 mr-1" />Archive</Button>
-              )}
-              <Button variant="outline" size="sm" className="text-destructive" onClick={() => setConfirmDelete(true)}><Trash2 className="w-4 h-4 mr-1" />Delete</Button>
             </div>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-              Save Changes
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {emailModal && (
-        <EmailPreviewModal
-          open={!!emailModal}
-          onClose={() => setEmailModal(null)}
-          initialFrom={emailModal.from}
-          initialTo={emailModal.to}
-          initialSubject={emailModal.subject}
-          initialBody={emailModal.body}
-        />
+          ))}
+        </div>
       )}
-      <ConfirmDialog
-        open={confirmDelete}
-        onClose={() => setConfirmDelete(false)}
-        onConfirm={handleDelete}
-        title="Delete Show?"
-        description="This action cannot be undone."
-        confirmLabel="Delete"
-        destructive
-      />
-    </>
-  );
-}
 
-function CheckItem({ label, checked }) {
-  return (
-    <div className="flex items-center gap-3 p-2.5 rounded-lg bg-muted">
-      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${checked ? 'bg-primary border-primary' : 'border-muted-foreground'}`}>
-        {checked && <svg className="w-3 h-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-      </div>
-      <span className={`text-sm ${checked ? 'text-foreground' : 'text-muted-foreground'}`}>{label}</span>
-    </div>
-  );
-}
+      {/* Tabbed views */}
+      <Tabs defaultValue="upcoming">
+        <TabsList>
+          {Object.entries(tabShows).map(([key, arr]) => (
+            <TabsTrigger key={key} value={key} className="capitalize">
+              {key.replace(/_/g, ' ')} <Badge variant="secondary" className="ml-1 text-xs">{arr.length}</Badge>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {Object.entries(tabShows).map(([key, arr]) => (
+          <TabsContent key={key} value={key} className="mt-4">
+            {isLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[1,2,3].map(i => <Skeleton key={i} className="h-32 w-full rounded-xl" />)}
+              </div>
+            ) : arr.length === 0 ? (
+              <EmptyState icon={Clapperboard} title={`No ${key.replace(/_/g, ' ')} shows`} />
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {arr.map(s => <ShowCard key={s.id} show={s} onClick={setSelectedShow} />)}
+              </div>
+            )}
+          </TabsContent>
+        ))}
+      </Tabs>
 
-function ToggleCheckItem({ label, checked, onChange }) {
-  return (
-    <div className="flex items-center gap-3 p-2.5 rounded-lg bg-muted cursor-pointer" onClick={() => onChange(!checked)}>
-      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${checked ? 'bg-primary border-primary' : 'border-muted-foreground hover:border-primary'}`}>
-        {checked && <svg className="w-3 h-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-      </div>
-      <span className={`text-sm select-none ${checked ? 'text-foreground' : 'text-muted-foreground'}`}>{label}</span>
+      <AddShowModal open={addModal} onClose={() => setAddModal(false)} onCreated={refresh} />
+      <ShowDetailModal show={selectedShow} open={!!selectedShow} onClose={() => setSelectedShow(null)} onUpdated={refresh} />
     </div>
   );
 }

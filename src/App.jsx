@@ -21,7 +21,6 @@ import DirectorShowPortal from '@/pages/DirectorShowPortal';
 import DirectorHub from '@/pages/DirectorHub';
 import ImportShows from '@/pages/ImportShows';
 import ApplyForAssignment from '@/pages/ApplyForAssignment';
-import StudentProfile from '@/pages/StudentProfile';
 import EmailTemplates from '@/pages/EmailTemplates';
 import PendingEmails from '@/pages/PendingEmails';
 import DirectorPortal from '@/pages/DirectorPortal';
@@ -29,7 +28,10 @@ import Login from '@/pages/Login';
 
 const RoleBasedHome = () => {
   const { role } = useOutletContext?.() || {};
-  if (role === 'director') return <Navigate to="/director/portal" replace />;
+  // #region agent log
+  fetch('http://127.0.0.1:7340/ingest/00b824c1-7ecc-4155-9444-25770c8cfb9d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f933e5'},body:JSON.stringify({sessionId:'f933e5',runId:'qa-run',hypothesisId:'H1',location:'src/App.jsx:RoleBasedHome',message:'Role-based home route decision',data:{role},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  if (role === 'director') return <DirectorDashboard />;
   return <CommandCenter />;
 };
 
@@ -48,8 +50,8 @@ const AuthenticatedApp = () => {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
-      const isPublicRoute = window.location.pathname.startsWith('/apply') ||
-                            window.location.pathname.startsWith('/profile');
+      // Only redirect to login for non-public routes
+      const isPublicRoute = window.location.pathname.startsWith('/apply');
       if (!isPublicRoute) {
         navigateToLogin();
       }
@@ -69,9 +71,9 @@ const AuthenticatedApp = () => {
         <Route path="/students" element={<StudentDirectory />} />
         <Route path="/resources" element={<ResourceLibrary />} />
         <Route path="/director/request-tech" element={<DirectorTechRequest />} />
+        <Route path="/director" element={<Navigate to="/director/portal" replace />} />
         <Route path="/director/show-portal" element={<DirectorShowPortal />} />
         <Route path="/director/hub" element={<DirectorHub />} />
-        <Route path="/director/portal" element={<DirectorPortal />} />
         <Route path="/admin/import-shows" element={<ImportShows />} />
         <Route path="/admin/email-templates" element={<EmailTemplates />} />
         <Route path="/admin/pending-emails" element={<PendingEmails />} />
@@ -87,8 +89,9 @@ function App() {
       <Router>
         <Routes>
           <Route path="/apply" element={<ApplyForAssignment />} />
-          <Route path="/profile" element={<StudentProfile />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/director" element={<Navigate to="/director/portal" replace />} />
+          <Route path="/director/portal" element={<DirectorPortal />} />
           <Route path="*" element={
             <AuthProvider>
               <AuthenticatedApp />

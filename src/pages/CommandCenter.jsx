@@ -1,13 +1,13 @@
+// @ts-nocheck
 import { db } from '@/lib/backend/client';
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useOutletContext, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { runEmailEngine } from '@/lib/emailEngine';
-import { showNeedsAction, parseDateSafe, crewCount, formatDateDisplay } from '@/lib/showUtils';
-import { differenceInDays, format } from 'date-fns';
+import { showNeedsAction, parseDateSafe, crewCount } from '@/lib/showUtils';
+import { differenceInDays, format, formatDistanceToNow } from 'date-fns';
 import ShowDetailModal from '@/components/admin/ShowDetailModal';
-import EmailPreviewModal from '@/components/shared/EmailPreviewModal';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +17,7 @@ import {
   Mail, Send, X, Loader2, ChevronRight, AlertTriangle,
   CheckCircle, Clapperboard, Users, Clock, CreditCard,
   Phone, FileText, ClipboardCheck, Bell, RefreshCw,
-  GraduationCap, Award, Package
+  GraduationCap, Award
 } from 'lucide-react';
 
 // ─── colour map for action items ────────────────────────────────────────────
@@ -113,19 +113,20 @@ export default function CommandCenter() {
   });
 
   useEffect(() => {
-    if (role && role !== 'admin') navigate('/director', { replace: true });
+    if (role && role !== 'admin') navigate('/director/portal', { replace: true });
   }, [role]);
 
-  if (role && role !== 'admin') return null;
+  const adminEnabled = role === 'admin';
 
   // ── queries ──
-  const { data: shows = [], isLoading: lsh } = useQuery({ queryKey: ['cc-shows'], queryFn: () => db.entities.Show.list('-updated_date', 500) });
-  const { data: assignments = [], isLoading: la } = useQuery({ queryKey: ['cc-assignments'], queryFn: () => db.entities.TechAssignment.list('-updated_date', 500) });
-  const { data: students = [] } = useQuery({ queryKey: ['cc-students'], queryFn: () => db.entities.Student.list() });
-  const { data: trainings = [] } = useQuery({ queryKey: ['cc-trainings'], queryFn: () => db.entities.Training.list() });
-  const { data: enrollments = [] } = useQuery({ queryKey: ['cc-enrollments'], queryFn: () => db.entities.BadgeEnrollment.list() });
-  const { data: pendingEmails = [], isLoading: lpe } = useQuery({ queryKey: ['cc-pending-emails'], queryFn: () => db.entities.PendingEmail.list('-created_date', 200) });
-  const { data: templates = [] } = useQuery({ queryKey: ['cc-templates'], queryFn: () => db.entities.EmailTemplate.list() });
+  const { data: shows = [], isLoading: lsh } = useQuery({ queryKey: ['cc-shows'], queryFn: () => db.entities.Show.list('-updated_date', 500), enabled: adminEnabled });
+  const { data: assignments = [], isLoading: la } = useQuery({ queryKey: ['cc-assignments'], queryFn: () => db.entities.TechAssignment.list('-updated_date', 500), enabled: adminEnabled });
+  const { data: students = [] } = useQuery({ queryKey: ['cc-students'], queryFn: () => db.entities.Student.list(), enabled: adminEnabled });
+  const { data: trainings = [] } = useQuery({ queryKey: ['cc-trainings'], queryFn: () => db.entities.Training.list(), enabled: adminEnabled });
+  const { data: enrollments = [] } = useQuery({ queryKey: ['cc-enrollments'], queryFn: () => db.entities.BadgeEnrollment.list(), enabled: adminEnabled });
+  const { data: pendingEmails = [], isLoading: lpe } = useQuery({ queryKey: ['cc-pending-emails'], queryFn: () => db.entities.PendingEmail.list('-created_date', 200), enabled: adminEnabled });
+  const { data: templates = [] } = useQuery({ queryKey: ['cc-templates'], queryFn: () => db.entities.EmailTemplate.list(), enabled: adminEnabled });
+  const { data: events = [] } = useQuery({ queryKey: ['cc-activity-events'], queryFn: () => db.entities.ActivityEvent.list('-created_date', 300), enabled: adminEnabled });
 
   const isLoading = lsh || la || lpe;
 
@@ -142,19 +143,16 @@ export default function CommandCenter() {
     scannedRef.current = true;
     (async () => {
       setScanning(true);
-      try {
-        const queued = await runEmailEngine(assignments, templates, pendingEmails);
-        if (queued.length) {
-          toast({ title: `${queued.length} new email${queued.length !== 1 ? 's' : ''} queued` });
-          qc.invalidateQueries({ queryKey: ['cc-pending-emails'] });
-        }
-      } catch (err) {
-        console.error('[auto-scan]', err);
-      } finally {
-        setScanning(false);
+      const queued = await runEmailEngine(assignments, templates, pendingEmails);
+      if (queued.length) {
+        toast({ title: `${queued.length} new email${queued.length !== 1 ? 's' : ''} queued` });
+        qc.invalidateQueries({ queryKey: ['cc-pending-emails'] });
       }
+      setScanning(false);
     })();
   }, [assignments.length, templates.length]);
+
+  if (role && role !== 'admin') return null;
 
   // ── derived data ──
   const today = new Date();
@@ -165,6 +163,15 @@ export default function CommandCenter() {
 
   const pendingQueue = pendingEmails.filter(e => e.status === 'pending');
   const sentEmails   = pendingEmails.filter(e => e.status === 'sent');
+  const stalePendingEmails = pendingQueue.filter((e) => {
+    if (!e.created_date) return false;
+    return differenceInDays(new Date(), new Date(e.created_date)) >= 5;
+  });
+  const latestEventByPendingEmail = events.reduce((acc, event) => {
+    if (!event.pending_email_id) return acc;
+    if (!acc[event.pending_email_id]) acc[event.pending_email_id] = event;
+    return acc;
+  }, {});
 
   const thisWeekShows = shows.filter(s => {
     const d = parseDateSafe(s.tech_week_start);
@@ -196,30 +203,20 @@ export default function CommandCenter() {
 
   // ── inline action handlers ──
   const handleMarkContacted = async (showId, actionKey) => {
-    try {
-      await db.entities.Show.update(showId, { director_contacted_date: today.toISOString().slice(0, 10) });
-      dismiss(actionKey);
-      refresh();
-      toast({ title: 'Director marked as contacted' });
-    } catch (err) {
-      console.error('[handleMarkContacted]', err);
-      toast({ title: 'Failed to save', description: err?.message || 'Unknown error', variant: 'destructive' });
-    }
+    await db.entities.Show.update(showId, { director_contacted_date: today.toISOString().slice(0, 10) });
+    dismiss(actionKey);
+    refresh();
+    toast({ title: 'Director marked as contacted' });
   };
 
   const handleMarkPosted = async (showId, actionKey) => {
-    try {
-      await db.entities.Show.update(showId, {
-        posting_created_date: today.toISOString().slice(0, 10),
-        workflow_status: 'posting_open',
-      });
-      dismiss(actionKey);
-      refresh();
-      toast({ title: 'Application posting recorded' });
-    } catch (err) {
-      console.error('[handleMarkPosted]', err);
-      toast({ title: 'Failed to save', description: err?.message || 'Unknown error', variant: 'destructive' });
-    }
+    await db.entities.Show.update(showId, {
+      posting_created_date: today.toISOString().slice(0, 10),
+      workflow_status: 'posting_open',
+    });
+    dismiss(actionKey);
+    refresh();
+    toast({ title: 'Application posting recorded' });
   };
 
   const dismiss = (key) => {
@@ -236,33 +233,63 @@ export default function CommandCenter() {
 
   const handleSend = async (email) => {
     setSending(email.id);
+    const body = editedBody || email.body;
+    const actorId = user?.id || user?.email || null;
+    const actorRole = role || null;
     try {
-      const body = editedBody || email.body;
       if (body !== email.body) await db.entities.PendingEmail.update(email.id, { body });
-      await db.integrations.Core.SendEmail({ to: email.to, subject: email.subject, body });
-      await db.entities.PendingEmail.update(email.id, { status: 'sent' });
+      const providerResponse = await db.integrations.Core.SendEmail({ to: email.to, subject: email.subject, body });
+      await db.entities.PendingEmail.update(email.id, {
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        sent_by: actorId,
+        provider_message_id: providerResponse?.id || providerResponse?.messageId || null,
+        delivery_status: 'sent',
+        error_message: null,
+      });
+      await db.activity.log({
+        event_type: 'email_sent',
+        source: 'command_center',
+        actor_id: actorId,
+        actor_role: actorRole,
+        assignment_id: email.assignment_id || null,
+        pending_email_id: email.id,
+        summary: `Email sent to ${email.to}`,
+        metadata: { trigger: email.trigger, show_title: email.show_title || null },
+      });
       toast({ title: `Sent to ${email.to}` });
-      setPreviewEmail(null);
-      setEditedBody('');
-      refresh();
     } catch (err) {
-      console.error('[handleSend]', err);
-      toast({ title: 'Failed to send email', description: err?.message || 'Unknown error', variant: 'destructive' });
-    } finally {
-      setSending(null);
+      await db.entities.PendingEmail.update(email.id, {
+        delivery_status: 'failed',
+        error_message: String(err?.message || err),
+        retry_count: (email.retry_count || 0) + 1,
+      });
+      try {
+        await db.activity.log({
+          event_type: 'email_failed',
+          source: 'command_center',
+          actor_id: actorId,
+          actor_role: actorRole,
+          assignment_id: email.assignment_id || null,
+          pending_email_id: email.id,
+          summary: `Email failed for ${email.to}`,
+          metadata: { error: String(err?.message || err) },
+        });
+      } catch (_) {}
+      toast({ title: 'Send failed', description: String(err?.message || err), variant: 'destructive' });
     }
+    setPreviewEmail(null);
+    setEditedBody('');
+    setSending(null);
+    refresh();
+    qc.invalidateQueries({ queryKey: ['cc-activity-events'] });
   };
 
   const handleReject = async (email) => {
-    try {
-      await db.entities.PendingEmail.update(email.id, { status: 'rejected' });
-      toast({ title: 'Email rejected' });
-      setPreviewEmail(null);
-      refresh();
-    } catch (err) {
-      console.error('[handleReject]', err);
-      toast({ title: 'Failed to reject', description: err?.message || 'Unknown error', variant: 'destructive' });
-    }
+    await db.entities.PendingEmail.update(email.id, { status: 'rejected' });
+    toast({ title: 'Email rejected' });
+    setPreviewEmail(null);
+    refresh();
   };
 
   // ── render ──
@@ -399,6 +426,12 @@ export default function CommandCenter() {
                       {email.to_name ? `${email.to_name} · ` : ''}{email.to}
                       {email.show_title && ` · ${email.show_title}`}
                     </p>
+                    {latestEventByPendingEmail[email.id]?.source && (
+                      <p className="text-[11px] text-orange-700/80 mt-0.5">
+                        Last touch: {latestEventByPendingEmail[email.id].source}
+                        {latestEventByPendingEmail[email.id].created_date ? ` · ${formatDistanceToNow(new Date(latestEventByPendingEmail[email.id].created_date), { addSuffix: true })}` : ''}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <Button size="sm" className="h-7 text-xs" onClick={e => { e.stopPropagation(); handleSend(email); }} disabled={sending === email.id}>
@@ -412,6 +445,24 @@ export default function CommandCenter() {
               ))}
             </div>
           )}
+        </section>
+      )}
+
+      {stalePendingEmails.length > 0 && (
+        <section>
+          <h2 className="text-sm font-semibold flex items-center gap-2 mb-3">
+            <AlertTriangle className="w-4 h-4 text-red-500" />
+            Stale Pending Emails
+            <Badge variant="secondary">{stalePendingEmails.length}</Badge>
+          </h2>
+          <div className="space-y-2">
+            {stalePendingEmails.map((email) => (
+              <div key={email.id} className="p-3 rounded-lg border border-red-200 bg-red-50">
+                <p className="text-sm font-medium text-red-900">{email.subject}</p>
+                <p className="text-xs text-red-700 mt-0.5">{email.to} {email.show_title ? `· ${email.show_title}` : ''}</p>
+              </div>
+            ))}
+          </div>
         </section>
       )}
 

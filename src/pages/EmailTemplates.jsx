@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Plus, Pencil, Trash2, Mail, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
@@ -18,17 +17,19 @@ import EmptyState from '@/components/shared/EmptyState';
 
 const TRIGGER_LABELS = {
   technician_assigned: 'Technician Assigned',
+  no_tech_90_days: 'No Tech 90 Days Before Show',
   no_tech_30_days: 'No Tech 30 Days Before Show',
   crew_form_overdue: 'Crew Assignment Form Overdue',
 };
 
 const TRIGGER_COLORS = {
   technician_assigned: 'bg-green-50 text-green-700 border-green-200',
+  no_tech_90_days: 'bg-blue-50 text-blue-700 border-blue-200',
   no_tech_30_days: 'bg-amber-50 text-amber-700 border-amber-200',
   crew_form_overdue: 'bg-red-50 text-red-700 border-red-200',
 };
 
-const PLACEHOLDER_HINT = '{{show_title}}, {{director_name}}, {{student_name}}, {{tech_week_start}}, {{days_until_tech}}, {{theater}}, {{troupe}}';
+const PLACEHOLDER_HINT = '{{show_title}}, {{director_name}}, {{director_first_name}}, {{student_name}}, {{tech_week_start}}, {{days_until_tech}}, {{theater}}, {{troupe}}, {{tech_needs_form_url}}';
 
 const BLANK = { name: '', trigger: 'technician_assigned', recipient: 'director', subject: '', body: '', active: true };
 

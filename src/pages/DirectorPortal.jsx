@@ -1,29 +1,31 @@
 import { db } from '@/lib/backend/client';
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import StatusBadge from '@/components/shared/StatusBadge';
-import TechNeedsForm from '@/components/director/TechNeedsForm';
 import {
   Clapperboard, Users, ClipboardList, CheckCircle,
-  Clock, AlertCircle, LogOut, ChevronRight, Mail, Phone,
+  Clock, AlertCircle, LogOut, ChevronRight, Mail,
   ExternalLink, FileText
 } from 'lucide-react';
 import { formatDateDisplay, parseTechnicians } from '@/lib/showUtils';
 
 export default function DirectorPortal() {
+  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [selectedShow, setSelectedShow] = useState(null);
-  const [showTechForm, setShowTechForm] = useState(false);
-  const queryClient = useQueryClient();
 
   useEffect(() => {
     db.auth.me().then(u => { setUser(u); setLoadingUser(false); }).catch(() => {
+      // #region agent log
+      fetch('http://127.0.0.1:7340/ingest/00b824c1-7ecc-4155-9444-25770c8cfb9d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f933e5'},body:JSON.stringify({sessionId:'f933e5',runId:'qa-run',hypothesisId:'H2',location:'src/pages/DirectorPortal.jsx:auth',message:'Director portal auth failed; redirecting to login',data:{path:'/director/portal'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       db.auth.redirectToLogin('/director/portal');
     });
   }, []);
@@ -41,6 +43,14 @@ export default function DirectorPortal() {
   });
 
   const activeShows = (shows.length > 0 ? shows : allShows).filter(s => s.status !== 'archived');
+  const { data: drafts = [] } = useQuery({
+    queryKey: ['director-tech-drafts', user?.email],
+    queryFn: () => db.entities.TechAssignment.filter({ director_email: user?.email, status: 'draft' }),
+    enabled: !!user?.email,
+  });
+  // #region agent log
+  fetch('http://127.0.0.1:7340/ingest/00b824c1-7ecc-4155-9444-25770c8cfb9d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f933e5'},body:JSON.stringify({sessionId:'f933e5',runId:'qa-run',hypothesisId:'H2',location:'src/pages/DirectorPortal.jsx:data',message:'Director portal data loaded',data:{userEmail:user?.email||null,userName:user?.full_name||null,showsByEmail:shows.length,showsByName:allShows.length,activeShows:activeShows.length},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
   const isLoading = loadingUser || loadingShows;
 
@@ -53,23 +63,6 @@ export default function DirectorPortal() {
   }
 
   const firstName = user?.full_name ? user.full_name.trim().split(' ')[0] : 'Director';
-
-  if (showTechForm) {
-    return (
-      <div className="min-h-screen bg-background">
-        <PortalHeader user={user} />
-        <div className="max-w-3xl mx-auto px-4 py-8">
-          <Button variant="ghost" size="sm" className="mb-4" onClick={() => setShowTechForm(false)}>
-            ← Back to Dashboard
-          </Button>
-          <TechNeedsForm user={user} onSubmitted={() => {
-            setShowTechForm(false);
-            queryClient.invalidateQueries({ queryKey: ['director-portal-shows'] });
-          }} />
-        </div>
-      </div>
-    );
-  }
 
   if (selectedShow) {
     return (
@@ -111,7 +104,7 @@ export default function DirectorPortal() {
               <div className="text-center py-8">
                 <Clapperboard className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">No shows found yet.</p>
-                <p className="text-xs text-muted-foreground mt-1">If you have a show, submit a Tech Needs Form below.</p>
+                <p className="text-xs text-muted-foreground mt-1">If you have a show, submit a Director Tech Request below.</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -126,8 +119,25 @@ export default function DirectorPortal() {
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {show.theater && `${show.theater} · `}Tech Week: {formatDateDisplay(show.tech_week_start)}
                       </p>
+                      {(show.director_portal_last_saved_at || show.director_portal_last_submitted_at) && (
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {show.director_portal_last_submitted_at
+                            ? `Form submitted ${new Date(show.director_portal_last_submitted_at).toLocaleDateString()}`
+                            : `Draft saved ${new Date(show.director_portal_last_saved_at).toLocaleDateString()}`}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate('/director/request-tech');
+                        }}
+                      >
+                        {show.director_portal_last_saved_at && !show.director_portal_last_submitted_at ? 'Continue Director Tech Request' : 'Open Director Tech Request'}
+                      </Button>
                       <TechStatusPill show={show} />
                       <ChevronRight className="w-4 h-4 text-muted-foreground" />
                     </div>
@@ -138,7 +148,7 @@ export default function DirectorPortal() {
           </CardContent>
         </Card>
 
-        {/* Submit Tech Needs Form */}
+        {/* Submit Director Tech Request */}
         <Card className="border-primary/20 bg-accent/30">
           <CardContent className="pt-6">
             <div className="flex items-start gap-4">
@@ -146,12 +156,12 @@ export default function DirectorPortal() {
                 <ClipboardList className="w-6 h-6 text-primary" />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-card-foreground">Submit a Tech Needs Form</h3>
+                <h3 className="font-semibold text-card-foreground">Submit a Director Tech Request</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Have a new show or need to update your tech requirements? Fill out the form and we'll get you set up.
+                  Have a new show or need to update your tech requirements? Submit a Director Tech Request and we will get you set up.
                 </p>
-                <Button className="mt-3" onClick={() => setShowTechForm(true)}>
-                  Fill Out Form
+                <Button className="mt-3" onClick={() => navigate('/director/request-tech')}>
+                  {drafts.length > 0 ? `Continue Director Tech Request (${drafts.length})` : 'Start Director Tech Request'}
                 </Button>
               </div>
             </div>
@@ -333,7 +343,7 @@ function NextStepBanner({ show }) {
   } else if (show.director_contacted_date) {
     message = '🔍 We\'re actively searching for a technician for your show. Hang tight!';
   } else {
-    message = '📝 Next step: Please fill out the Tech Needs Form below so we can find the right technician for your show.';
+    message = '📝 Next step: Please submit a Director Tech Request so we can find the right technician for your show.';
     color = 'bg-amber-50 border-amber-200 text-amber-800';
   }
 

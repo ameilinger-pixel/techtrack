@@ -1,16 +1,14 @@
 import { db } from '@/lib/backend/client';
 import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import {
   GraduationCap, Award, Clapperboard, Mail,
-  CheckCircle, Clock, X, Loader2, Search
+  CheckCircle, Clock, Loader2, Search
 } from 'lucide-react';
 
 // Public page — no auth required. Student looks up their profile by email.

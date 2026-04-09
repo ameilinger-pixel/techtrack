@@ -12,6 +12,7 @@ const TABLE_BY_ENTITY = {
   Resource: 'resources',
   EmailTemplate: 'email_templates',
   PendingEmail: 'pending_emails',
+  ActivityEvent: 'activity_events',
   Badge: 'badges',
   BadgeEnrollment: 'badge_enrollments',
   Training: 'trainings',
@@ -260,6 +261,42 @@ function makeIntegrationsApi() {
   };
 }
 
+function makeActivityApi() {
+  return {
+    async log({
+      event_type,
+      source = 'app',
+      actor_id = null,
+      actor_role = null,
+      show_id = null,
+      assignment_id = null,
+      pending_email_id = null,
+      summary = '',
+      metadata = {},
+    }) {
+      const sb = requireSupabase();
+      const payload = {
+        event_type,
+        source,
+        actor_id,
+        actor_role,
+        show_id,
+        assignment_id,
+        pending_email_id,
+        summary,
+        metadata,
+      };
+      const { data, error } = await sb
+        .from('activity_events')
+        .insert({ body: payload })
+        .select('*')
+        .single();
+      if (error) throw error;
+      return rowToEntity('activity_events', data);
+    },
+  };
+}
+
 export function createDb() {
   const entities = {};
   for (const [name, table] of Object.entries(TABLE_BY_ENTITY)) {
@@ -271,6 +308,7 @@ export function createDb() {
     auth: makeAuthApi(),
     entities,
     integrations: makeIntegrationsApi(),
+    activity: makeActivityApi(),
   };
 }
 

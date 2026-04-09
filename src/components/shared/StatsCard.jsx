@@ -2,7 +2,7 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-export default function StatsCard({ title, value, subtitle, icon: Icon, color = 'primary', onClick }) {
+export default function StatsCard({ title, value, subtitle = null, icon: Icon, color = 'primary', onClick = undefined }) {
   const colorMap = {
     primary: 'bg-primary/10 text-primary',
     green: 'bg-emerald-50 text-emerald-600',

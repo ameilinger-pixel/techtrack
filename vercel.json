@@ -1,3 +1,6 @@
 {
+  "redirects": [
+    { "source": "/director", "destination": "/director/portal", "permanent": false }
+  ],
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

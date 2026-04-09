@@ -1,3 +1,7 @@
+# Standalone showplayer app (separate repo; ignore if copied back in)
+showplayer-qlab/
+showplayer/
+
 #env
 .env
 .env.*
