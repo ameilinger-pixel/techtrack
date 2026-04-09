@@ -39,10 +39,14 @@ export default function DirectorHub() {
     queryFn: () => db.entities.TechAssignment.list('-updated_date', 500),
   });
 
-  // Filter to this director's assignments
-  const myAssignments = assignments.filter(
-    a => a.director_email === user?.email
-  );
+  const emailLower = (user?.email || '').trim().toLowerCase();
+  const nameLower = (user?.full_name || '').trim().toLowerCase();
+  const myAssignments = assignments.filter((a) => {
+    const ae = (a.director_email || '').trim().toLowerCase();
+    if (emailLower && ae === emailLower) return true;
+    const an = (a.director_name || '').trim().toLowerCase();
+    return nameLower && an === nameLower;
+  });
 
   const handleToggle = async (assignment, field) => {
     await db.entities.TechAssignment.update(assignment.id, { [field]: !assignment[field] });

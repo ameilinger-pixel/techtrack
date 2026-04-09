@@ -4,7 +4,7 @@ import React from 'react';
 import { useOutletContext, Link } from 'react-router-dom';
 
 import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -35,8 +35,18 @@ export default function DirectorDashboard() {
   const { toast } = useToast();
 
   const { data: assignments = [], isLoading } = useQuery({
-    queryKey: ['director-assignments', user?.email],
-    queryFn: () => db.entities.TechAssignment.filter({ director_email: user?.email }),
+    queryKey: ['director-assignments', user?.email, user?.full_name],
+    queryFn: async () => {
+      const all = await db.entities.TechAssignment.list('-updated_date', 500);
+      const emailLower = (user?.email || '').trim().toLowerCase();
+      const nameLower = (user?.full_name || '').trim().toLowerCase();
+      return all.filter((r) => {
+        const re = (r.director_email || '').trim().toLowerCase();
+        if (emailLower && re === emailLower) return true;
+        const rn = (r.director_name || '').trim().toLowerCase();
+        return nameLower && rn === nameLower;
+      });
+    },
     enabled: !!user?.email,
   });
 

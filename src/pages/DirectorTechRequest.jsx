@@ -1,7 +1,8 @@
 import { db } from '@/lib/backend/client';
 
-import React, { useState, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,8 +39,12 @@ const formatTime12 = (t) => {
 export default function DirectorTechRequest() {
   const { user } = useOutletContext();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const [draftId, setDraftId] = useState(null);
+  const [draftSavedAt, setDraftSavedAt] = useState(null);
 
   const [formData, setFormData] = useState({
     show_title: "",
@@ -64,7 +69,63 @@ export default function DirectorTechRequest() {
 
   const [newPerformance, setNewPerformance] = useState({ date: "", call_time: "", curtain_time: "" });
 
+  const { data: directorShows = [] } = useQuery({
+    queryKey: ['director-tech-request-shows', user?.email, user?.full_name],
+    queryFn: async () => {
+      const byEmail = user?.email ? await db.entities.Show.filter({ director_email: user.email }) : [];
+      if (byEmail.length) return byEmail;
+      return user?.full_name ? await db.entities.Show.filter({ director_name: user.full_name }) : [];
+    },
+    enabled: !!(user?.email || user?.full_name),
+  });
+
+  const { data: existingRequests = [] } = useQuery({
+    queryKey: ['director-tech-request-existing', user?.email],
+    queryFn: () => db.entities.TechAssignment.filter({ director_email: user?.email }),
+    enabled: !!user?.email,
+  });
+
   const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
+
+  const normalize = (s) => String(s || '').trim().toLowerCase();
+  const selectedShow = useMemo(
+    () => directorShows.find((s) => normalize(s.title) === normalize(formData.show_title)),
+    [directorShows, formData.show_title]
+  );
+  const hasMeaningfulInput = useMemo(() => {
+    return !!(
+      formData.show_title ||
+      formData.theater ||
+      formData.rehearsal_location ||
+      formData.rehearsal_schedule ||
+      formData.tech_week.start_date ||
+      formData.tech_week.end_date ||
+      formData.tech_week.start_time ||
+      formData.tech_week.end_time ||
+      formData.performances.length ||
+      formData.roles_needed.length ||
+      formData.notes ||
+      formData.specific_tech_request
+    );
+  }, [formData]);
+
+  useEffect(() => {
+    if (!existingRequests.length) return;
+    const matching = existingRequests.find((r) => r.status === 'draft' && normalize(r.show_title) === normalize(formData.show_title))
+      || existingRequests.find((r) => r.status === 'draft');
+    if (!matching) return;
+    setDraftId(matching.id);
+    setDraftSavedAt(matching.director_portal_last_saved_at || null);
+    setFormData((prev) => ({
+      ...prev,
+      ...matching,
+      tech_week: matching.tech_week || prev.tech_week,
+      performances: Array.isArray(matching.performances) ? matching.performances : prev.performances,
+      roles_needed: Array.isArray(matching.roles_needed) ? matching.roles_needed : prev.roles_needed,
+      equipment_needed: Array.isArray(matching.equipment_needed) ? matching.equipment_needed : prev.equipment_needed,
+      show_files: Array.isArray(matching.show_files) ? matching.show_files : prev.show_files,
+    }));
+  }, [existingRequests]);
 
   const handleTechWeekChange = (field, value) =>
     setFormData(prev => ({ ...prev, tech_week: { ...prev.tech_week, [field]: value } }));
@@ -127,6 +188,35 @@ export default function DirectorTechRequest() {
   const removeFile = (index) =>
     setFormData(prev => ({ ...prev, show_files: prev.show_files.filter((_, i) => i !== index) }));
 
+  const saveDraft = async () => {
+    if (!user?.email || !hasMeaningfulInput) return;
+    setDraftSaving(true);
+    const nowIso = new Date().toISOString();
+    const payload = {
+      ...formData,
+      show_id: selectedShow?.id || formData.show_id || null,
+      director_name: formData.director_name || user?.full_name || '',
+      director_email: formData.director_email || user?.email || '',
+      status: 'draft',
+      director_portal_last_saved_at: nowIso,
+    };
+    try {
+      if (draftId) {
+        await db.entities.TechAssignment.update(draftId, payload);
+      } else {
+        const created = await db.entities.TechAssignment.create(payload);
+        setDraftId(created.id);
+      }
+      setDraftSavedAt(nowIso);
+      await queryClient.invalidateQueries({ queryKey: ['director-tech-request-existing', user?.email] });
+      toast({ title: 'Draft saved' });
+    } catch (err) {
+      toast({ title: 'Draft save failed', description: String(err?.message || err), variant: 'destructive' });
+    } finally {
+      setDraftSaving(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const { tech_week, performances, roles_needed, other_role_needed } = formData;
@@ -173,6 +263,7 @@ export default function DirectorTechRequest() {
     setSaving(true);
     try {
       await db.entities.TechAssignment.create({
+        show_id: selectedShow?.id || formData.show_id || null,
         show_title: formData.show_title,
         director_name: formData.director_name,
         director_email: formData.director_email,
@@ -199,6 +290,7 @@ export default function DirectorTechRequest() {
         opening_night: openingNight,
         assignment_status: "pending_admin_approval",
         status: "pending_admin_approval",
+        director_portal_last_submitted_at: new Date().toISOString(),
         notes: formData.notes,
         can_shadow_tech: formData.shadow_student_ok,
         shadow_student_ok: formData.shadow_student_ok,
@@ -235,6 +327,7 @@ export default function DirectorTechRequest() {
 
       setSaving(false);
       setIsSubmitted(true);
+      await queryClient.invalidateQueries({ queryKey: ['director-tech-request-existing', user?.email] });
     } catch (err) {
       setSaving(false);
       toast({ title: "Submission failed. Please try again.", variant: "destructive" });
@@ -286,11 +379,49 @@ export default function DirectorTechRequest() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" onClick={() => void saveDraft()} disabled={draftSaving || !hasMeaningfulInput}>
+            {draftSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+            Save Draft
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            {draftSavedAt ? `Last saved ${new Date(draftSavedAt).toLocaleString()}` : 'No draft saved yet'}
+          </span>
+        </div>
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2"><Briefcase className="w-4 h-4" />Show Information</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {directorShows.length > 0 && (
+              <div className="space-y-2">
+                <Label>Select Existing Show (optional)</Label>
+                <select
+                  value={selectedShow?.id || ''}
+                  onChange={(e) => {
+                    const show = directorShows.find((s) => s.id === e.target.value);
+                    if (!show) return;
+                    setFormData((prev) => ({
+                      ...prev,
+                      show_id: show.id,
+                      show_title: show.title || prev.show_title,
+                      theater: show.theater || prev.theater,
+                      tech_week: {
+                        ...prev.tech_week,
+                        start_date: show.tech_week_start || prev.tech_week.start_date,
+                        end_date: show.tech_week_end || prev.tech_week.end_date,
+                      },
+                    }));
+                  }}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Manual entry</option>
+                  {directorShows.map((s) => (
+                    <option key={s.id} value={s.id}>{s.title}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Show title *</Label>
               <Input value={formData.show_title} onChange={e => handleChange("show_title", e.target.value)} required />

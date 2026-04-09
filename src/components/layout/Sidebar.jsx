@@ -4,7 +4,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
-  LayoutDashboard, Users, ClipboardList, BookOpen, Package,
+  LayoutDashboard, ClipboardList, BookOpen, Package,
   UserCog, Wrench, GraduationCap, ChevronLeft, ChevronRight,
   LogOut, Clapperboard, FileUp, Mail, Clock, Zap
 } from 'lucide-react';

@@ -1,7 +1,7 @@
 import { db } from '@/lib/backend/client';
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +16,27 @@ import {
 import { formatDateDisplay, parseTechnicians } from '@/lib/showUtils';
 
 export default function DirectorPortal() {
+  const normalize = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const likelySameShow = (show, request) => {
+    if (show?.id && request?.show_id && show.id === request.show_id) return true;
+    const sTitle = normalize(show?.title);
+    const rTitle = normalize(request?.show_title);
+    const titleMatch = !!sTitle && !!rTitle && (
+      sTitle === rTitle ||
+      sTitle.includes(rTitle) ||
+      rTitle.includes(sTitle)
+    );
+    const techWeekMatch = !!show?.tech_week_start && !!request?.tech_week_start && show.tech_week_start === request.tech_week_start;
+    const openingNightMatch = !!show?.opening_night && !!request?.opening_night && show.opening_night === request.opening_night;
+    return titleMatch || techWeekMatch || openingNightMatch;
+  };
+
+  const isSubmittedRequest = (r) => {
+    if (!r || r.status === 'draft') return false;
+    if (r.status && r.status !== 'draft') return true;
+    return !!r.director_portal_last_submitted_at;
+  };
+
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
@@ -23,9 +44,6 @@ export default function DirectorPortal() {
 
   useEffect(() => {
     db.auth.me().then(u => { setUser(u); setLoadingUser(false); }).catch(() => {
-      // #region agent log
-      fetch('http://127.0.0.1:7340/ingest/00b824c1-7ecc-4155-9444-25770c8cfb9d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f933e5'},body:JSON.stringify({sessionId:'f933e5',runId:'qa-run',hypothesisId:'H2',location:'src/pages/DirectorPortal.jsx:auth',message:'Director portal auth failed; redirecting to login',data:{path:'/director/portal'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       db.auth.redirectToLogin('/director/portal');
     });
   }, []);
@@ -45,12 +63,38 @@ export default function DirectorPortal() {
   const activeShows = (shows.length > 0 ? shows : allShows).filter(s => s.status !== 'archived');
   const { data: drafts = [] } = useQuery({
     queryKey: ['director-tech-drafts', user?.email],
-    queryFn: () => db.entities.TechAssignment.filter({ director_email: user?.email, status: 'draft' }),
+    queryFn: async () => {
+      const all = await db.entities.TechAssignment.list('-updated_date', 500);
+      const emailLower = (user?.email || '').trim().toLowerCase();
+      const nameLower = (user?.full_name || '').trim().toLowerCase();
+      return all.filter((r) => {
+        if (r.status !== 'draft') return false;
+        const re = (r.director_email || '').trim().toLowerCase();
+        if (emailLower && re === emailLower) return true;
+        const rn = (r.director_name || '').trim().toLowerCase();
+        return nameLower && rn === nameLower;
+      });
+    },
     enabled: !!user?.email,
   });
-  // #region agent log
-  fetch('http://127.0.0.1:7340/ingest/00b824c1-7ecc-4155-9444-25770c8cfb9d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f933e5'},body:JSON.stringify({sessionId:'f933e5',runId:'qa-run',hypothesisId:'H2',location:'src/pages/DirectorPortal.jsx:data',message:'Director portal data loaded',data:{userEmail:user?.email||null,userName:user?.full_name||null,showsByEmail:shows.length,showsByName:allShows.length,activeShows:activeShows.length},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
+  const { data: directorRequests = [] } = useQuery({
+    queryKey: ['director-tech-requests', user?.email, user?.full_name],
+    queryFn: async () => {
+      if (!user?.email) return [];
+      const all = await db.entities.TechAssignment.list('-updated_date', 500);
+      const emailLower = user.email.trim().toLowerCase();
+      const nameLower = (user.full_name || '').trim().toLowerCase();
+      return all.filter((r) => {
+        const re = (r.director_email || '').trim().toLowerCase();
+        if (emailLower && re === emailLower) return true;
+        const rn = (r.director_name || '').trim().toLowerCase();
+        return nameLower && rn === nameLower;
+      });
+    },
+    enabled: !!user?.email,
+  });
+  const anySubmittedDirectorRequest = directorRequests.some((r) => isSubmittedRequest(r));
+  const anyDraftDirectorRequest = directorRequests.some((r) => r.status === 'draft');
 
   const isLoading = loadingUser || loadingShows;
 
@@ -108,7 +152,20 @@ export default function DirectorPortal() {
               </div>
             ) : (
               <div className="space-y-2">
-                {activeShows.map(show => (
+                {activeShows.map(show => {
+                  const showRequests = directorRequests.filter((r) => likelySameShow(show, r));
+                  const hasSubmittedRequest = showRequests.some((r) => isSubmittedRequest(r));
+                  const hasDraftRequest = showRequests.some((r) => r.status === 'draft');
+                  const actionLabel = hasSubmittedRequest
+                    ? 'View / Update Director Request'
+                    : hasDraftRequest
+                      ? 'Continue Director Request'
+                      : anySubmittedDirectorRequest
+                        ? 'View / Update Director Request'
+                        : anyDraftDirectorRequest
+                          ? 'Continue Director Request'
+                          : 'Complete Director Request';
+                  return (
                   <button
                     key={show.id}
                     onClick={() => setSelectedShow(show)}
@@ -136,13 +193,13 @@ export default function DirectorPortal() {
                           navigate('/director/request-tech');
                         }}
                       >
-                        {show.director_portal_last_saved_at && !show.director_portal_last_submitted_at ? 'Continue Director Tech Request' : 'Open Director Tech Request'}
+                        {actionLabel}
                       </Button>
                       <TechStatusPill show={show} />
                       <ChevronRight className="w-4 h-4 text-muted-foreground" />
                     </div>
                   </button>
-                ))}
+                )})}
               </div>
             )}
           </CardContent>
@@ -161,12 +218,40 @@ export default function DirectorPortal() {
                   Have a new show or need to update your tech requirements? Submit a Director Tech Request and we will get you set up.
                 </p>
                 <Button className="mt-3" onClick={() => navigate('/director/request-tech')}>
-                  {drafts.length > 0 ? `Continue Director Tech Request (${drafts.length})` : 'Start Director Tech Request'}
+                  {drafts.length > 0 ? `Continue Director Request (${drafts.length})` : 'Complete Director Request'}
                 </Button>
               </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* Quick Navigation */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Link to="/director/request-tech">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+              <CardContent className="pt-5 pb-4 text-center">
+                <p className="font-medium text-sm">Director Tech Request</p>
+                <p className="text-xs text-muted-foreground mt-1">Start, complete, or review your request</p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link to="/students">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+              <CardContent className="pt-5 pb-4 text-center">
+                <p className="font-medium text-sm">Student Directory</p>
+                <p className="text-xs text-muted-foreground mt-1">Browse student technicians</p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link to="/resources">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+              <CardContent className="pt-5 pb-4 text-center">
+                <p className="font-medium text-sm">Resource Library</p>
+                <p className="text-xs text-muted-foreground mt-1">Guides and documents</p>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
 
         {/* Contact */}
         <Card>
