@@ -121,11 +121,11 @@ export default function CommandCenter() {
   // ── queries ──
   const { data: shows = [], isLoading: lsh } = useQuery({ queryKey: ['cc-shows'], queryFn: () => db.entities.Show.list('-updated_date', 500), enabled: adminEnabled });
   const { data: assignments = [], isLoading: la } = useQuery({ queryKey: ['cc-assignments'], queryFn: () => db.entities.TechAssignment.list('-updated_date', 500), enabled: adminEnabled });
-  const { data: students = [] } = useQuery({ queryKey: ['cc-students'], queryFn: () => db.entities.Student.list(), enabled: adminEnabled });
-  const { data: trainings = [] } = useQuery({ queryKey: ['cc-trainings'], queryFn: () => db.entities.Training.list(), enabled: adminEnabled });
-  const { data: enrollments = [] } = useQuery({ queryKey: ['cc-enrollments'], queryFn: () => db.entities.BadgeEnrollment.list(), enabled: adminEnabled });
+  const { data: students = [] } = useQuery({ queryKey: ['cc-students'], queryFn: () => db.entities.Student.list('-updated_date', 500), enabled: adminEnabled });
+  const { data: trainings = [] } = useQuery({ queryKey: ['cc-trainings'], queryFn: () => db.entities.Training.list('-updated_date', 500), enabled: adminEnabled });
+  const { data: enrollments = [] } = useQuery({ queryKey: ['cc-enrollments'], queryFn: () => db.entities.BadgeEnrollment.list('-updated_date', 500), enabled: adminEnabled });
   const { data: pendingEmails = [], isLoading: lpe } = useQuery({ queryKey: ['cc-pending-emails'], queryFn: () => db.entities.PendingEmail.list('-created_date', 200), enabled: adminEnabled });
-  const { data: templates = [] } = useQuery({ queryKey: ['cc-templates'], queryFn: () => db.entities.EmailTemplate.list(), enabled: adminEnabled });
+  const { data: templates = [] } = useQuery({ queryKey: ['cc-templates'], queryFn: () => db.entities.EmailTemplate.list('-updated_date', 500), enabled: adminEnabled });
   const { data: events = [] } = useQuery({ queryKey: ['cc-activity-events'], queryFn: () => db.entities.ActivityEvent.list('-created_date', 300), enabled: adminEnabled });
 
   const isLoading = lsh || la || lpe;

@@ -31,9 +31,6 @@ export default function EmailPreviewModal({ open, onClose, initialTo, initialCc,
 
   const handleSend = async () => {
     setSending(true);
-    // #region agent log
-    fetch('http://127.0.0.1:7340/ingest/00b824c1-7ecc-4155-9444-25770c8cfb9d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f933e5'},body:JSON.stringify({sessionId:'f933e5',runId:'qa-run',hypothesisId:'H5',location:'src/components/shared/EmailPreviewModal.jsx:handleSend',message:'Manual email send started',data:{hasTo:!!to,hasSubject:!!subject,ccCount:(cc||'').split(',').filter(Boolean).length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     try {
       await db.integrations.Core.SendEmail({
         to,
@@ -41,15 +38,9 @@ export default function EmailPreviewModal({ open, onClose, initialTo, initialCc,
         body: `<div style="font-family:Arial,sans-serif;line-height:1.6">${body.replace(/\n/g, '<br/>')}</div>`,
       });
       toast({ title: 'Email sent successfully' });
-      // #region agent log
-      fetch('http://127.0.0.1:7340/ingest/00b824c1-7ecc-4155-9444-25770c8cfb9d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f933e5'},body:JSON.stringify({sessionId:'f933e5',runId:'qa-run',hypothesisId:'H5',location:'src/components/shared/EmailPreviewModal.jsx:handleSend',message:'Manual email send succeeded',data:{to},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       onSent?.();
       onClose();
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7340/ingest/00b824c1-7ecc-4155-9444-25770c8cfb9d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f933e5'},body:JSON.stringify({sessionId:'f933e5',runId:'qa-run',hypothesisId:'H5',location:'src/components/shared/EmailPreviewModal.jsx:handleSend',message:'Manual email send failed',data:{error:String(err?.message||err)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       toast({ title: 'Failed to send email', description: err.message, variant: 'destructive' });
     }
     setSending(false);

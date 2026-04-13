@@ -56,7 +56,7 @@ if (fs.existsSync(envBulkPath)) {
 const url = process.env.SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const tempPassword =
-  process.env.BULK_TEMP_PASSWORD || 'NTPA-Temp-Change-Me-2026!';
+  process.env.BULK_TEMP_PASSWORD || 'NTPATechTrack!';
 
 const csvPath = process.argv[2];
 if (!url || !serviceKey) {

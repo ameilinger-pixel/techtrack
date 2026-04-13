@@ -1,7 +1,7 @@
-import { db } from '@/lib/backend/client';
-
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+
+import { useAuth } from '@/lib/AuthContext';
 import Sidebar from './Sidebar';
 import { cn } from '@/lib/utils';
 
@@ -10,43 +10,49 @@ import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function AppLayout() {
+  const { user, isLoadingAuth } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [user, setUser] = useState(null);
   const [role, setRole] = useState('student');
-  const [loading, setLoading] = useState(true);
+  const [roleReady, setRoleReady] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
+    if (isLoadingAuth) {
+      setRoleReady(false);
+      return;
+    }
+    setRoleReady(false);
     let cancelled = false;
     (async () => {
       try {
-        const me = await db.auth.me();
-        if (cancelled) return;
-        setUser(me);
-        const r = await determineUserRole(me);
-        if (cancelled) return;
-        setRole(r);
+        if (!user) {
+          setRole('student');
+          setRoleReady(true);
+          return;
+        }
+        const r = await determineUserRole(user);
+        if (!cancelled) setRole(r);
       } catch {
-        // not logged in — layout still renders; child routes may redirect
+        if (!cancelled) setRole('student');
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setRoleReady(true);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user, isLoadingAuth]);
 
   useEffect(() => {
-    if (loading || !user) return;
+    if (isLoadingAuth || !roleReady || !user) return;
     if (role === 'director' && !location.pathname.startsWith('/director')) {
       navigate('/director/portal', { replace: true });
     }
-  }, [loading, user, role, location.pathname, navigate]);
+  }, [isLoadingAuth, roleReady, user, role, location.pathname, navigate]);
 
-  if (loading) {
+  if (isLoadingAuth || !roleReady) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background">
         <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
