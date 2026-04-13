@@ -19,25 +19,32 @@ export default function AppLayout() {
   const location = useLocation();
 
   useEffect(() => {
-    async function init() {
+    let cancelled = false;
+    (async () => {
       try {
         const me = await db.auth.me();
+        if (cancelled) return;
         setUser(me);
         const r = await determineUserRole(me);
+        if (cancelled) return;
         setRole(r);
-        // Redirect directors away from any non-director page
-        if (r === 'director' && !location.pathname.startsWith('/director')) {
-          navigate('/director/portal', { replace: true });
-          setLoading(false);
-          return;
-        }
-      } catch (e) {
-        // not logged in
+      } catch {
+        // not logged in — layout still renders; child routes may redirect
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setLoading(false);
-    }
-    init();
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  useEffect(() => {
+    if (loading || !user) return;
+    if (role === 'director' && !location.pathname.startsWith('/director')) {
+      navigate('/director/portal', { replace: true });
+    }
+  }, [loading, user, role, location.pathname, navigate]);
 
   if (loading) {
     return (

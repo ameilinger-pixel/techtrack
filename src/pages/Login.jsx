@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { supabase } from '@/lib/backend/supabaseClient';
+import { db } from '@/lib/backend/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,12 +19,23 @@ export default function Login() {
   const returnUrl = params.get('returnUrl') || '/';
 
   useEffect(() => {
-    if (!supabase) return;
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        navigate(returnUrl, { replace: true });
+    if (!supabase) return undefined;
+    let cancelled = false;
+    (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session || cancelled) return;
+      try {
+        await db.auth.me();
+        if (!cancelled) navigate(returnUrl, { replace: true });
+      } catch {
+        // Session exists but profile / RLS blocks app user — stay here; avoids / ↔ /login crash loop
       }
-    });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [navigate, returnUrl]);
 
   async function onSignIn(e) {
@@ -44,32 +56,18 @@ export default function Login() {
       toast({ title: error.message, variant: 'destructive' });
       return;
     }
-    navigate(returnUrl, { replace: true });
-  }
-
-  async function onSignUp(e) {
-    e.preventDefault();
-    if (!supabase) return;
-    if (!fullName.trim()) {
-      toast({ title: 'Enter your full name', variant: 'destructive' });
-      return;
+    try {
+      await db.auth.me();
+      navigate(returnUrl, { replace: true });
+    } catch (err) {
+      toast({
+        title: 'Signed in, but profile failed to load',
+        description:
+          err?.message ||
+          'Your account may be missing a TechTrack profile. Contact an administrator.',
+        variant: 'destructive',
+      });
     }
-    setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName.trim() } },
-    });
-    setLoading(false);
-    if (error) {
-      toast({ title: error.message, variant: 'destructive' });
-      return;
-    }
-    toast({
-      title: 'Check your email',
-      description: 'Confirm your address if your project requires email verification.',
-    });
-    setMode('signin');
   }
 
   return (

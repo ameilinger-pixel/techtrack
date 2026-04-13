@@ -2,9 +2,11 @@ import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes, useOutletContext, Navigate } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
+import AuthBootstrapError from '@/components/AuthBootstrapError';
 
 import AppLayout from '@/components/layout/AppLayout';
 import CommandCenter from '@/pages/CommandCenter';
@@ -27,13 +29,28 @@ import DirectorPortal from '@/pages/DirectorPortal';
 import Login from '@/pages/Login';
 
 const RoleBasedHome = () => {
-  const { role } = useOutletContext?.() || {};
+  const ctx = useOutletContext();
+  const role = ctx?.role;
   if (role === 'director') return <DirectorDashboard />;
   return <CommandCenter />;
 };
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, checkAppState } = useAuth();
+  const authRedirectSentRef = useRef(false);
+
+  useEffect(() => {
+    if (isLoadingPublicSettings || isLoadingAuth) return;
+    if (!authError || authError.type !== 'auth_required') return;
+    if (window.location.pathname.startsWith('/apply')) return;
+    if (authRedirectSentRef.current) return;
+    authRedirectSentRef.current = true;
+    navigateToLogin();
+  }, [isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin]);
+
+  useEffect(() => {
+    if (!authError) authRedirectSentRef.current = false;
+  }, [authError]);
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
@@ -46,13 +63,23 @@ const AuthenticatedApp = () => {
   if (authError) {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
-      // Only redirect to login for non-public routes
-      const isPublicRoute = window.location.pathname.startsWith('/apply');
-      if (!isPublicRoute) {
-        navigateToLogin();
-      }
-      return null;
+    }
+    if (authError.type === 'unknown') {
+      return (
+        <AuthBootstrapError
+          message={authError.message}
+          onRetry={() => void checkAppState()}
+        />
+      );
+    }
+    if (authError.type === 'auth_required') {
+      // Redirect runs once in useEffect (calling assign during render can freeze / crash the tab)
+      return (
+        <div className="fixed inset-0 flex flex-col items-center justify-center gap-3 bg-background p-6 text-center">
+          <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground">Redirecting to sign in…</p>
+        </div>
+      );
     }
   }
 
@@ -84,17 +111,15 @@ function App() {
   return (
     <QueryClientProvider client={queryClientInstance}>
       <Router>
-        <Routes>
-          <Route path="/apply" element={<ApplyForAssignment />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/director" element={<Navigate to="/director/portal" replace />} />
-          <Route path="/director/portal" element={<DirectorPortal />} />
-          <Route path="*" element={
-            <AuthProvider>
-              <AuthenticatedApp />
-            </AuthProvider>
-          } />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route path="/apply" element={<ApplyForAssignment />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/director" element={<Navigate to="/director/portal" replace />} />
+            <Route path="/director/portal" element={<DirectorPortal />} />
+            <Route path="*" element={<AuthenticatedApp />} />
+          </Routes>
+        </AuthProvider>
       </Router>
       <Toaster />
     </QueryClientProvider>

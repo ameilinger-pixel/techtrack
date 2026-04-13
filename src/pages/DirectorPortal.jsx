@@ -1,6 +1,8 @@
 import { db } from '@/lib/backend/client';
+import { useAuth } from '@/lib/AuthContext';
+import AuthBootstrapError from '@/components/AuthBootstrapError';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { useQuery } from '@tanstack/react-query';
@@ -38,15 +40,23 @@ export default function DirectorPortal() {
   };
 
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
-  const [loadingUser, setLoadingUser] = useState(true);
+  const { user, isLoadingAuth, authError, checkAppState } = useAuth();
   const [selectedShow, setSelectedShow] = useState(null);
+  const portalLoginRedirectRef = useRef(false);
 
   useEffect(() => {
-    db.auth.me().then(u => { setUser(u); setLoadingUser(false); }).catch(() => {
+    if (user) portalLoginRedirectRef.current = false;
+  }, [user]);
+
+  useEffect(() => {
+    if (isLoadingAuth) return;
+    if (authError?.type === 'unknown') return;
+    if (!user) {
+      if (portalLoginRedirectRef.current) return;
+      portalLoginRedirectRef.current = true;
       db.auth.redirectToLogin('/director/portal');
-    });
-  }, []);
+    }
+  }, [isLoadingAuth, user, authError?.type]);
 
   const { data: shows = [], isLoading: loadingShows } = useQuery({
     queryKey: ['director-portal-shows', user?.email],
@@ -96,9 +106,24 @@ export default function DirectorPortal() {
   const anySubmittedDirectorRequest = directorRequests.some((r) => isSubmittedRequest(r));
   const anyDraftDirectorRequest = directorRequests.some((r) => r.status === 'draft');
 
-  const isLoading = loadingUser || loadingShows;
+  const isLoading = isLoadingAuth || loadingShows;
 
-  if (loadingUser) {
+  if (isLoadingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (authError?.type === 'unknown') {
+    return (
+      <AuthBootstrapError
+        message={authError.message}
+        onRetry={() => void checkAppState()}
+      />
+    );
+  }
+  if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -106,7 +131,7 @@ export default function DirectorPortal() {
     );
   }
 
-  const firstName = user?.full_name ? user.full_name.trim().split(' ')[0] : 'Director';
+  const firstName = user.full_name ? user.full_name.trim().split(' ')[0] : 'Director';
 
   if (selectedShow) {
     return (

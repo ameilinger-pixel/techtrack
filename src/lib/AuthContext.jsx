@@ -6,6 +6,19 @@ import { supabase } from '@/lib/backend/supabaseClient';
 
 const AuthContext = createContext();
 
+const SESSION_TIMEOUT_MS = 12000;
+const PROFILE_TIMEOUT_MS = 12000;
+/** Failsafe so UI never spins forever if Supabase promises never settle */
+const BOOTSTRAP_FAILSAFE_MS = 25000;
+
+function raceTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} (${ms}ms)`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -14,7 +27,13 @@ export const AuthProvider = ({ children }) => {
   const [authError, setAuthError] = useState(null);
   const [appPublicSettings, setAppPublicSettings] = useState(null);
 
-  const hydrateFromSession = useCallback(async () => {
+  /**
+   * @param {import('@supabase/supabase-js').Session | null | undefined} sessionFromEvent
+   *   Pass the session from `onAuthStateChange(_, session)` when hydrating inside that callback.
+   *   Passing `undefined` means "fetch via getSession()" (only safe *outside* the auth callback).
+   *   Calling `getSession()` from inside `onAuthStateChange` can deadlock the Supabase JS client.
+   */
+  const hydrateFromSession = useCallback(async (sessionFromEvent) => {
     if (!supabase) {
       setUser(null);
       setIsAuthenticated(false);
@@ -27,9 +46,18 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      let session;
+      if (sessionFromEvent !== undefined) {
+        session = sessionFromEvent;
+      } else {
+        const { data, error } = await raceTimeout(
+          supabase.auth.getSession(),
+          SESSION_TIMEOUT_MS,
+          'getSession'
+        );
+        if (error) throw error;
+        session = data?.session ?? null;
+      }
 
       if (!session) {
         setUser(null);
@@ -42,7 +70,14 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
-      const currentUser = await db.auth.me();
+      // Defer profile fetch out of the auth mutex window (avoids rare deadlocks with getUser)
+      await Promise.resolve();
+
+      const currentUser = await raceTimeout(
+        db.auth.me(),
+        PROFILE_TIMEOUT_MS,
+        'loadProfile'
+      );
       setUser(currentUser);
       setIsAuthenticated(true);
       setAuthError(null);
@@ -51,6 +86,15 @@ export const AuthProvider = ({ children }) => {
       console.error('Auth hydrate failed:', error);
       setUser(null);
       setIsAuthenticated(false);
+      const msg = error?.message || 'Failed to load session';
+      const timedOut = /getSession|loadProfile|\(\d+ms\)/.test(msg);
+      if (timedOut && supabase) {
+        try {
+          await supabase.auth.signOut();
+        } catch (_) {
+          /* ignore */
+        }
+      }
       if (error?.status === 401 || error?.status === 403) {
         setAuthError({
           type: 'auth_required',
@@ -59,7 +103,9 @@ export const AuthProvider = ({ children }) => {
       } else {
         setAuthError({
           type: 'unknown',
-          message: error?.message || 'Failed to load session',
+          message: timedOut
+            ? 'Sign-in is taking too long or your session is stuck. Try again, or sign in from a fresh tab. If this keeps happening, check Vercel env vars (Supabase URL/key) and your network.'
+            : msg,
         });
       }
     }
@@ -69,9 +115,43 @@ export const AuthProvider = ({ children }) => {
     setIsLoadingPublicSettings(true);
     setIsLoadingAuth(true);
     setAuthError(null);
-    await hydrateFromSession();
-    setIsLoadingPublicSettings(false);
-    setIsLoadingAuth(false);
+    try {
+      await Promise.race([
+        hydrateFromSession(),
+        new Promise((_, reject) => {
+          setTimeout(
+            () =>
+              reject(
+                Object.assign(new Error('App bootstrap timed out'), {
+                  code: 'BOOTSTRAP_TIMEOUT',
+                })
+              ),
+            BOOTSTRAP_FAILSAFE_MS
+          );
+        }),
+      ]);
+    } catch (err) {
+      if (err?.code === 'BOOTSTRAP_TIMEOUT') {
+        console.error('[Auth] Bootstrap failsafe — hydrate did not finish', err);
+        setUser(null);
+        setIsAuthenticated(false);
+        setAuthError({
+          type: 'unknown',
+          message:
+            'The app could not finish loading (internal timeout). Try refreshing. If you use an ad blocker or privacy extension, allow this site to reach your Supabase project.',
+        });
+        if (supabase) {
+          try {
+            await supabase.auth.signOut();
+          } catch (_) {
+            /* ignore */
+          }
+        }
+      }
+    } finally {
+      setIsLoadingPublicSettings(false);
+      setIsLoadingAuth(false);
+    }
   }, [hydrateFromSession]);
 
   useEffect(() => {
@@ -82,13 +162,16 @@ export const AuthProvider = ({ children }) => {
     if (!supabase) return undefined;
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      hydrateFromSession();
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Never call getSession() synchronously inside this callback — it can deadlock.
+      queueMicrotask(() => {
+        void hydrateFromSession(session);
+      });
     });
     return () => subscription.unsubscribe();
   }, [hydrateFromSession]);
 
-  const logout = (shouldRedirect = true) => {
+  const logout = useCallback((shouldRedirect = true) => {
     setUser(null);
     setIsAuthenticated(false);
     if (shouldRedirect) {
@@ -96,11 +179,11 @@ export const AuthProvider = ({ children }) => {
     } else {
       db.auth.logout(false);
     }
-  };
+  }, []);
 
-  const navigateToLogin = () => {
+  const navigateToLogin = useCallback(() => {
     db.auth.redirectToLogin(window.location.href);
-  };
+  }, []);
 
   return (
     <AuthContext.Provider

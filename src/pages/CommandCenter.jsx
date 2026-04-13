@@ -113,8 +113,8 @@ export default function CommandCenter() {
   });
 
   useEffect(() => {
-    if (role && role !== 'admin') navigate('/director/portal', { replace: true });
-  }, [role]);
+    if (role === 'director') navigate('/director/portal', { replace: true });
+  }, [role, navigate]);
 
   const adminEnabled = role === 'admin';
 
